@@ -89,6 +89,27 @@ body{
   cursor:pointer;font-size:.74rem;transition:all .12s;
 }
 .copy-btn:hover{background:rgba(122,255,138,.14)}
+/* ── Zoom region ── */
+.canvas-wrap{position:relative}
+.zoom-region{
+  position:absolute;top:0;bottom:0;
+  background:rgba(122,255,138,.08);
+  border-left:2px solid rgba(122,255,138,.5);
+  border-right:2px solid rgba(122,255,138,.5);
+  cursor:grab;pointer-events:auto;
+  transition:background .12s;
+}
+.zoom-region:hover{background:rgba(122,255,138,.14)}
+.zoom-region.dragging{cursor:grabbing;background:rgba(122,255,138,.18)}
+.zoom-region-label{
+  position:absolute;top:4px;left:50%;transform:translateX(-50%);
+  font-size:.58rem;color:rgba(122,255,138,.7);white-space:nowrap;
+  font-family:'SF Mono',Consolas,monospace;pointer-events:none;
+}
+.zoom-info{
+  display:flex;justify-content:space-between;padding:4px 2px 0;
+  font-size:.65rem;color:#4a5a6d;font-family:'SF Mono',Consolas,monospace;
+}
 @media(max-width:900px){
   body{grid-template-columns:1fr}
   .controls{max-height:none;border-right:0;border-bottom:1px solid rgba(255,255,255,.06)}
@@ -159,7 +180,7 @@ body{
 
   <div class="group">
     <div class="group-title">Display</div>
-    <div class="toggle-row"><input type="checkbox" id="tMirror"> Mirror (symmetric)</div>
+    <div class="toggle-row"><input type="checkbox" id="tMirror" checked> Mirror (symmetric)</div>
     <div class="toggle-row"><input type="checkbox" id="tEnvelope"> Envelope overlay</div>
     <div class="toggle-row"><input type="checkbox" id="tCenterLine"> Center line</div>
     <div class="toggle-row"><input type="checkbox" id="tGlow" checked> Glow effect</div>
@@ -209,9 +230,23 @@ body{
 <div class="preview-area">
   <div class="preview-section">
     <span class="preview-label">Frequency-Colored Waveform</span>
-    <div class="canvas-wrap">
+    <div class="canvas-wrap" id="mainWrap">
       <canvas id="cvMain"></canvas>
+      <div class="zoom-region" id="zoomRegion">
+        <span class="zoom-region-label">zoom</span>
+      </div>
       <div class="legend" id="legend"></div>
+    </div>
+  </div>
+  <div class="preview-section">
+    <span class="preview-label">Zoomed In — drag the highlight above to move the region</span>
+    <div class="canvas-wrap">
+      <canvas id="cvZoom"></canvas>
+      <div class="legend" id="legendZoom"></div>
+    </div>
+    <div class="zoom-info">
+      <span id="zoomRange">Bars 80–140 of 400</span>
+      <span id="zoomPct">8-bar view</span>
     </div>
   </div>
   <div class="preview-section">
@@ -233,15 +268,15 @@ body{
 const DEFAULTS = {
   bass:'#ff2d2d',lowMid:'#ff8c00',mid:'#e8e820',highMid:'#20d4a0',treble:'#6060ff',ultra:'#c040ff',
   blend:60,barW:3,gap:1,height:180,round:50,style:'bars',
-  mirror:false,envelope:false,centerLine:false,glow:true,bg:'#0a0e14',glowInt:40,
+  mirror:true,envelope:false,centerLine:false,glow:true,bg:'#0a0e14',glowInt:40,
   bassW:35,midW:40,trebW:25,smooth:6,envColor:'#ffffff',envOpacity:50
 };
 
 const PRESETS = {
   'Rekordbox':{
     bass:'#e03030',lowMid:'#e87020',mid:'#d0c820',highMid:'#30b0e0',treble:'#3060e0',ultra:'#8040d0',
-    blend:70,barW:2,gap:0,height:180,round:0,style:'bars',
-    mirror:false,envelope:false,centerLine:false,glow:false,bg:'#0a0a0a',glowInt:0,
+    blend:70,barW:2,gap:0,height:200,round:0,style:'bars',
+    mirror:true,envelope:false,centerLine:false,glow:false,bg:'#0a0a0a',glowInt:0,
     bassW:40,midW:35,trebW:25,smooth:4,envColor:'#ffffff',envOpacity:40
   },
   'Serato':{
@@ -277,7 +312,7 @@ const PRESETS = {
   'Forest Night':{
     bass:'#d4e157',lowMid:'#a0d840',mid:'#60e070',highMid:'#40d8a0',treble:'#30c0c0',ultra:'#7aff8a',
     blend:60,barW:3,gap:1,height:180,round:50,style:'bars',
-    mirror:false,envelope:false,centerLine:false,glow:true,bg:'#080e08',glowInt:40,
+    mirror:true,envelope:false,centerLine:false,glow:true,bg:'#080e08',glowInt:40,
     bassW:35,midW:40,trebW:25,smooth:6,envColor:'#e0f0e4',envOpacity:50
   },
   'Ice Minimal':{
@@ -298,44 +333,124 @@ const freqData = generateTrackData();
 
 function generateTrackData(){
   const data = [];
-  // Simulate a DJ track: intro → build → drop → break → drop → outro
+  // Seed a deterministic random for consistent look
+  let seed = 42;
+  function rng(){ seed=(seed*16807+0)%2147483647; return(seed&0x7fffffff)/2147483647; }
+
+  // Simulate a real DJ track with distinct frequency sections:
+  //  0-8%  : Intro — hi-hats + pads (treble/mid dominant = blue/green)
+  //  8-20% : Vocal build — mids dominant (yellow/green)
+  //  20-25%: Riser — sweeping low→high (red→purple transition)
+  //  25-50%: Drop 1 — heavy bass + full spectrum (red/orange)
+  //  50-58%: Breakdown — melodic pads + vocals (green/blue)
+  //  58-65%: Vocal section — strong mids (yellow)
+  //  65-72%: Build 2 — riser again (sweeping)
+  //  72-90%: Drop 2 — bass heavy but brighter (orange/yellow)
+  //  90-100%: Outro — filtering out, highs only (blue/purple)
+
   for(let i=0;i<BARS;i++){
     const t = i/BARS;
-    // Energy envelope
-    let energy;
-    if(t<0.08) energy=0.15+t*3; // intro ramp
-    else if(t<0.22) energy=0.4+Math.sin(t*20)*0.15; // build
-    else if(t<0.25) energy=0.5+t*1.5; // buildup
-    else if(t<0.5) energy=0.7+Math.sin(t*8)*0.2; // drop
-    else if(t<0.55) energy=0.5-((t-0.5)*6); // break start
-    else if(t<0.7) energy=0.2+Math.sin(t*15)*0.1; // break
-    else if(t<0.73) energy=0.3+(t-0.7)*10; // build 2
-    else if(t<0.92) energy=0.75+Math.sin(t*7)*0.18; // drop 2
-    else energy=0.6*(1-(t-0.92)/0.08); // outro
+    let bass,lowMid,mid,highMid,treble,ultra,energy;
 
-    energy=Math.max(0.05,Math.min(1,energy));
+    if(t<0.08){
+      // Intro: hi-hats, atmospheric pads
+      energy = 0.15 + t*2;
+      bass = 0.05 + rng()*0.08;
+      lowMid = 0.08 + rng()*0.1;
+      mid = 0.2 + rng()*0.15;
+      highMid = 0.4 + rng()*0.2;
+      treble = 0.5 + rng()*0.25;
+      ultra = 0.35 + rng()*0.2;
+    } else if(t<0.20){
+      // Vocal build: mids and high-mids come in
+      const p = (t-0.08)/0.12;
+      energy = 0.3 + p*0.25;
+      bass = 0.1 + p*0.15 + rng()*0.1;
+      lowMid = 0.15 + p*0.2 + rng()*0.1;
+      mid = 0.5 + p*0.2 + rng()*0.15;
+      highMid = 0.4 + rng()*0.15;
+      treble = 0.3 - p*0.1 + rng()*0.1;
+      ultra = 0.15 + rng()*0.1;
+    } else if(t<0.25){
+      // Riser: sweeps from low to high
+      const p = (t-0.20)/0.05;
+      energy = 0.5 + p*0.3;
+      bass = 0.6*(1-p) + rng()*0.15;
+      lowMid = 0.5*(1-p*0.7) + rng()*0.1;
+      mid = 0.3 + p*0.2 + rng()*0.1;
+      highMid = 0.15 + p*0.5 + rng()*0.1;
+      treble = 0.1 + p*0.6 + rng()*0.15;
+      ultra = p*0.7 + rng()*0.1;
+    } else if(t<0.50){
+      // Drop 1: heavy bass + kicks, full spectrum
+      const beat = Math.sin(i*0.9)*0.5+0.5; // kick pulse
+      energy = 0.7 + Math.sin(i*0.4)*0.15 + rng()*0.1;
+      bass = 0.7 + beat*0.3 + rng()*0.1;
+      lowMid = 0.5 + beat*0.15 + rng()*0.15;
+      mid = 0.25 + rng()*0.2;
+      highMid = 0.2 + rng()*0.15;
+      treble = 0.15 + Math.abs(Math.sin(i*2.4))*0.2 + rng()*0.1;
+      ultra = 0.08 + rng()*0.1;
+    } else if(t<0.58){
+      // Breakdown: melodic, pads, filter sweep
+      const p = (t-0.50)/0.08;
+      energy = 0.5 - p*0.2;
+      bass = 0.1 + rng()*0.08;
+      lowMid = 0.15 + rng()*0.1;
+      mid = 0.35 + Math.sin(i*0.3)*0.15 + rng()*0.1;
+      highMid = 0.5 + rng()*0.15;
+      treble = 0.45 + rng()*0.2;
+      ultra = 0.3 + rng()*0.15;
+    } else if(t<0.65){
+      // Vocal section: strong mids
+      energy = 0.35 + rng()*0.1;
+      bass = 0.12 + rng()*0.08;
+      lowMid = 0.3 + rng()*0.15;
+      mid = 0.7 + rng()*0.2;
+      highMid = 0.45 + rng()*0.15;
+      treble = 0.2 + rng()*0.1;
+      ultra = 0.08 + rng()*0.05;
+    } else if(t<0.72){
+      // Build 2: sweeping up again
+      const p = (t-0.65)/0.07;
+      energy = 0.4 + p*0.4;
+      bass = 0.5*(1-p*0.5) + rng()*0.1;
+      lowMid = 0.35*(1-p*0.3) + rng()*0.1;
+      mid = 0.3 + p*0.15 + rng()*0.1;
+      highMid = 0.2 + p*0.45 + rng()*0.1;
+      treble = 0.15 + p*0.55 + rng()*0.1;
+      ultra = p*0.6 + rng()*0.1;
+    } else if(t<0.90){
+      // Drop 2: bass heavy but brighter than drop 1 (more mids/highs)
+      const beat = Math.sin(i*0.85)*0.5+0.5;
+      energy = 0.75 + Math.sin(i*0.35)*0.12 + rng()*0.08;
+      bass = 0.55 + beat*0.25 + rng()*0.1;
+      lowMid = 0.4 + beat*0.1 + rng()*0.12;
+      mid = 0.35 + rng()*0.2;
+      highMid = 0.3 + rng()*0.15;
+      treble = 0.2 + Math.abs(Math.sin(i*2.1))*0.15 + rng()*0.1;
+      ultra = 0.1 + rng()*0.08;
+    } else {
+      // Outro: filtering out, highs and atmosphere remain
+      const p = (t-0.90)/0.10;
+      energy = 0.5*(1-p*0.7);
+      bass = 0.3*(1-p) + rng()*0.05;
+      lowMid = 0.15*(1-p) + rng()*0.05;
+      mid = 0.2*(1-p*0.5) + rng()*0.1;
+      highMid = 0.35 + rng()*0.15;
+      treble = 0.5 + rng()*0.2;
+      ultra = 0.45 + p*0.2 + rng()*0.15;
+    }
 
-    // Frequency bands with musical character
-    const kick = (Math.sin(i*0.8)+1)*0.5; // bass pulse
-    const snare = Math.max(0,(Math.sin(i*1.6+2)-0.3)); // mid transients
-    const hihat = Math.abs(Math.sin(i*3.2+1))*0.6; // high steady
-    const sub = (Math.sin(i*0.3)+1)*0.4; // sub bass rumble
-
-    const bass = energy * (0.5+sub*0.3+kick*0.2) * (0.6+Math.random()*0.4);
-    const lowMid = energy * (0.3+kick*0.15+snare*0.2) * (0.5+Math.random()*0.5);
-    const mid = energy * (0.25+snare*0.35) * (0.4+Math.random()*0.6);
-    const highMid = energy * (0.2+hihat*0.3+snare*0.15) * (0.3+Math.random()*0.7);
-    const treble = energy * (0.15+hihat*0.4) * (0.3+Math.random()*0.7);
-    const ultra = energy * hihat * 0.3 * (0.2+Math.random()*0.8);
-
+    energy = Math.max(0.05, Math.min(1, energy));
     data.push({
-      amplitude: energy*(0.5+Math.random()*0.5),
-      bass: Math.min(1,bass),
-      lowMid: Math.min(1,lowMid),
-      mid: Math.min(1,mid),
-      highMid: Math.min(1,highMid),
-      treble: Math.min(1,treble),
-      ultra: Math.min(1,ultra)
+      amplitude: energy * (0.5 + rng()*0.5),
+      bass: Math.min(1, Math.max(0, bass)),
+      lowMid: Math.min(1, Math.max(0, lowMid)),
+      mid: Math.min(1, Math.max(0, mid)),
+      highMid: Math.min(1, Math.max(0, highMid)),
+      treble: Math.min(1, Math.max(0, treble)),
+      ultra: Math.min(1, Math.max(0, ultra))
     });
   }
   return data;
@@ -350,36 +465,62 @@ function lerpColor(c1,c2,t){
 
 function getBarColor(d,i){
   const s=state;
-  const bw=s.bassW/100, mw=s.midW/100, tw=s.trebW/100;
-  const total=d.bass*bw + d.lowMid*bw*0.6 + d.mid*mw + d.highMid*mw*0.6 + d.treble*tw + d.ultra*tw*0.5;
-  if(total===0) return s.bass;
-
-  const weights=[
-    {c:s.bass, w:d.bass*bw},
-    {c:s.lowMid, w:d.lowMid*bw*0.6},
-    {c:s.mid, w:d.mid*mw},
-    {c:s.highMid, w:d.highMid*mw*0.6},
-    {c:s.treble, w:d.treble*tw},
-    {c:s.ultra, w:d.ultra*tw*0.5}
+  // Use spectral centroid: map frequency energy to a position 0-1 along the color spectrum
+  // Each band sits at a fixed position: bass=0, lowMid=0.2, mid=0.4, highMid=0.6, treble=0.8, ultra=1.0
+  const bands = [
+    { power: d.bass,    pos: 0.0,  color: s.bass },
+    { power: d.lowMid,  pos: 0.2,  color: s.lowMid },
+    { power: d.mid,     pos: 0.4,  color: s.mid },
+    { power: d.highMid, pos: 0.6,  color: s.highMid },
+    { power: d.treble,  pos: 0.8,  color: s.treble },
+    { power: d.ultra,   pos: 1.0,  color: s.ultra }
   ];
 
-  const blend = s.blend/100;
-  let r=0,g=0,b=0;
-  for(const {c,w} of weights){
-    const rgb=hexToRgb(c);
-    const nw=w/total;
-    r+=rgb.r*nw; g+=rgb.g*nw; b+=rgb.b*nw;
+  // Apply frequency weights
+  const bw=s.bassW/100, mw=s.midW/100, tw=s.trebW/100;
+  const weightMap = [bw, bw*0.8, mw, mw*0.8, tw, tw*0.8];
+  for(let j=0;j<bands.length;j++) bands[j].power *= weightMap[j];
+
+  const totalPower = bands.reduce((sum,b)=>sum+b.power, 0);
+  if(totalPower < 0.001) return s.bass;
+
+  // Compute spectral centroid (weighted average position)
+  let centroid = 0;
+  for(const b of bands) centroid += b.pos * (b.power / totalPower);
+
+  const blend = s.blend / 100;
+
+  // At low blend: snap to nearest band color (sharp, per-band)
+  // At high blend: smoothly interpolate across the full color spectrum
+  // Find the two bands the centroid falls between
+  let lower = bands[0], upper = bands[bands.length-1];
+  for(let j=0;j<bands.length-1;j++){
+    if(centroid >= bands[j].pos && centroid <= bands[j+1].pos){
+      lower = bands[j]; upper = bands[j+1];
+      break;
+    }
   }
 
-  // Find dominant band for sharp mode
-  let maxW=0, maxC=s.bass;
-  for(const {c,w} of weights){ if(w>maxW){maxW=w;maxC=c;} }
-  const dom=hexToRgb(maxC);
-  r=dom.r+(r-dom.r)*blend;
-  g=dom.g+(g-dom.g)*blend;
-  b=dom.b+(b-dom.b)*blend;
+  const range = upper.pos - lower.pos;
+  const frac = range > 0 ? (centroid - lower.pos) / range : 0;
 
-  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+  // Interpolated color at centroid position
+  const lc = hexToRgb(lower.color), uc = hexToRgb(upper.color);
+  const ir = lc.r + (uc.r - lc.r) * frac;
+  const ig = lc.g + (uc.g - lc.g) * frac;
+  const ib = lc.b + (uc.b - lc.b) * frac;
+
+  // Dominant band color (for sharp/low-blend mode)
+  let maxP = 0, domColor = s.bass;
+  for(const b of bands){ if(b.power > maxP){ maxP=b.power; domColor=b.color; } }
+  const dc = hexToRgb(domColor);
+
+  // Blend between dominant (sharp) and interpolated (smooth)
+  const r = dc.r + (ir - dc.r) * blend;
+  const g = dc.g + (ig - dc.g) * blend;
+  const b2 = dc.b + (ib - dc.b) * blend;
+
+  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b2)})`;
 }
 
 // ── Build presets ──
@@ -429,8 +570,16 @@ for(const[id,key] of Object.entries(CTRL_MAP)){
   });
 }
 
+// ── Zoom state ──
+let zoomStart = 80; // data index
+let zoomSpan = 60;  // number of data bars to show in zoom view
+
 // ── Render ──
-function renderWaveform(canvasId, colored){
+function renderWaveform(canvasId, colored, sliceStart, sliceEnd){
+  sliceStart = sliceStart ?? 0;
+  sliceEnd = sliceEnd ?? BARS;
+  const sliceLen = sliceEnd - sliceStart;
+
   const c=document.getElementById(canvasId);
   const dpr=window.devicePixelRatio||1;
   const rect=c.parentElement.getBoundingClientRect();
@@ -450,7 +599,7 @@ function renderWaveform(canvasId, colored){
   const gap=state.gap;
   const step=barW+gap;
   const barCount=Math.floor(w/step);
-  const dataStep=BARS/barCount;
+  const dataStep=sliceLen/barCount;
   const centerY=state.mirror?h/2:h;
   const maxH=state.mirror?h/2-4:h-8;
   const roundFrac=state.round/100;
@@ -470,7 +619,7 @@ function renderWaveform(canvasId, colored){
     ctx.beginPath();
     const points=[];
     for(let i=0;i<barCount;i++){
-      const di=Math.floor(i*dataStep);
+      const di=Math.floor(sliceStart + i*dataStep);
       const d=freqData[Math.min(di,BARS-1)];
       const amp=d.amplitude;
       const x=i*step+barW/2;
@@ -523,7 +672,7 @@ function renderWaveform(canvasId, colored){
   } else {
     // Bars / blocks
     for(let i=0;i<barCount;i++){
-      const di=Math.floor(i*dataStep);
+      const di=Math.floor(sliceStart + i*dataStep);
       const d=freqData[Math.min(di,BARS-1)];
       const amp=d.amplitude;
       const x=i*step;
@@ -693,14 +842,99 @@ function updatePrompt(){
   }
 }
 
+function updateZoomRegion(){
+  const wrap=document.getElementById('mainWrap');
+  const region=document.getElementById('zoomRegion');
+  const wrapW=wrap.getBoundingClientRect().width;
+  const leftPct=(zoomStart/BARS)*100;
+  const widthPct=(zoomSpan/BARS)*100;
+  region.style.left=leftPct+'%';
+  region.style.width=widthPct+'%';
+
+  document.getElementById('zoomRange').textContent=`Bars ${zoomStart}–${zoomStart+zoomSpan} of ${BARS}`;
+  const pct=Math.round((zoomSpan/BARS)*100);
+  document.getElementById('zoomPct').textContent=`${pct}% of track · ${zoomSpan} bars`;
+}
+
 function updateAll(){
   renderWaveform('cvMain',true);
+  renderWaveform('cvZoom',true,zoomStart,zoomStart+zoomSpan);
   renderWaveform('cvStd',false);
+  updateZoomRegion();
   updateLegend();
+  // Copy legend to zoom too
+  document.getElementById('legendZoom').innerHTML=document.getElementById('legend').innerHTML;
   updateValues();
   updatePrompt();
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b.textContent===activePreset));
 }
+
+// ── Zoom region drag ──
+(function(){
+  const region=document.getElementById('zoomRegion');
+  const wrap=document.getElementById('mainWrap');
+  let dragging=false, startX=0, startZoomStart=0;
+
+  region.addEventListener('mousedown',e=>{
+    e.preventDefault();
+    dragging=true;
+    startX=e.clientX;
+    startZoomStart=zoomStart;
+    region.classList.add('dragging');
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!dragging) return;
+    const dx=e.clientX-startX;
+    const wrapW=wrap.getBoundingClientRect().width;
+    const dataDx=Math.round((dx/wrapW)*BARS);
+    zoomStart=Math.max(0,Math.min(BARS-zoomSpan,startZoomStart+dataDx));
+    updateAll();
+  });
+  window.addEventListener('mouseup',()=>{
+    if(dragging){dragging=false;region.classList.remove('dragging');}
+  });
+
+  // Touch support
+  region.addEventListener('touchstart',e=>{
+    dragging=true;
+    startX=e.touches[0].clientX;
+    startZoomStart=zoomStart;
+    region.classList.add('dragging');
+  },{passive:true});
+  window.addEventListener('touchmove',e=>{
+    if(!dragging) return;
+    const dx=e.touches[0].clientX-startX;
+    const wrapW=wrap.getBoundingClientRect().width;
+    const dataDx=Math.round((dx/wrapW)*BARS);
+    zoomStart=Math.max(0,Math.min(BARS-zoomSpan,startZoomStart+dataDx));
+    updateAll();
+  },{passive:true});
+  window.addEventListener('touchend',()=>{
+    if(dragging){dragging=false;region.classList.remove('dragging');}
+  });
+
+  // Click on main canvas to jump zoom region
+  document.getElementById('cvMain').addEventListener('click',e=>{
+    if(dragging) return;
+    const rect=wrap.getBoundingClientRect();
+    const clickPct=(e.clientX-rect.left)/rect.width;
+    const clickBar=Math.round(clickPct*BARS);
+    zoomStart=Math.max(0,Math.min(BARS-zoomSpan,clickBar-Math.floor(zoomSpan/2)));
+    updateAll();
+  });
+
+  // Scroll on zoom canvas to resize zoom span
+  document.getElementById('cvZoom').parentElement.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const delta=e.deltaY>0?10:-10;
+    const newSpan=Math.max(20,Math.min(200,zoomSpan+delta));
+    // Keep centered
+    const center=zoomStart+zoomSpan/2;
+    zoomSpan=newSpan;
+    zoomStart=Math.max(0,Math.min(BARS-zoomSpan,Math.round(center-zoomSpan/2)));
+    updateAll();
+  },{passive:false});
+})();
 
 // Copy
 document.getElementById('copyBtn').addEventListener('click',()=>{
