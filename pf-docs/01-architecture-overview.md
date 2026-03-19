@@ -3,16 +3,18 @@
 ## Metadata
 | Field | Value |
 |-------|-------|
-| Repository | `peak-codex-dac` |
-| Commit | `50c837f` |
-| Documented | `2026-03-18` |
+| Repository | `peak-codex-dac` ([github.com/peak-flow/react-codex-dac](https://github.com/peak-flow/react-codex-dac)) |
+| Commit | `eb2e526` |
+| Documented | `2026-03-18` (updated) |
+| Prior Commit | `50c837f` |
 | Verification Method | `LSP-equivalent (structured file reading)` |
 
 ## Verification Summary
-- [VERIFIED]: 42 claims
+- [VERIFIED]: 45 claims
 - [INFERRED]: 4 claims
 - [NOT_FOUND]: 8 items (routing, Redux, backend server, tests, database, auth, CI/CD, env config)
 - [ASSUMED]: 1 item (Vite SPA conventions)
+- [RESOLVED]: 1 issue (analysis queue deadlock, fixed at `eb2e526`)
 
 ---
 
@@ -67,9 +69,9 @@ PEAK DJ Command is a **desktop-first DJ MVP** built with Electron and React. It 
 
 | Component | Location | Responsibility | Evidence |
 |-----------|----------|----------------|----------|
-| App | `src/App.tsx` | Root component: all application state, audio context, analysis queue, deck management, Spotify orchestration | [VERIFIED: `src/App.tsx:1-724`] |
+| App | `src/App.tsx` | Root component: all application state, audio context, analysis queue (ref-based mutex), deck management, Spotify orchestration | [VERIFIED: `src/App.tsx:1-707`] |
 | DeckPanel | `src/components/DeckPanel.tsx` | Single DJ deck with playback controls, waveform, seek/pitch/volume faders, cue points, sync | [VERIFIED: `src/components/DeckPanel.tsx:1-333`] |
-| Waveform | `src/components/Waveform.tsx` | SVG waveform visualization with playhead, beat markers, cue point indicators | [VERIFIED: `src/components/Waveform.tsx:1-69`] |
+| Waveform | `src/components/Waveform.tsx` | Scrollable, zoomable SVG waveform with 6 zoom levels (Full to 2 bars), BPM-aware default zoom (8-bar), auto-scroll following playhead, bar-level grid at zoom >= 4x, beat phrase markers, cue point indicators | [VERIFIED: `src/components/Waveform.tsx:1-167`] |
 | LibraryTable | `src/components/LibraryTable.tsx` | Scrollable track table with BPM, key, energy, source columns and Load A/B actions | [VERIFIED: `src/components/LibraryTable.tsx:1-89`] |
 | Sidebar | `src/components/Sidebar.tsx` | Library stats, scan/analyze actions, Spotify Bridge config, crate navigation | [VERIFIED: `src/components/Sidebar.tsx:1-160`] |
 | InsightPanel | `src/components/InsightPanel.tsx` | AI transition coach, smart suggestions with scoring, set arc summary | [VERIFIED: `src/components/InsightPanel.tsx:1-81`] |
@@ -113,7 +115,7 @@ No test suite exists.
 | IPC: `spotify:login` | User Action (Connect) | `startSpotifyAuth` -> PKCE flow -> local HTTP server on 47832 | [VERIFIED: `electron/main.cjs:569`] |
 | IPC: `spotify:sync` | User Action (Sync) | `importSpotifyLibrary` -> paginated Spotify API calls | [VERIFIED: `electron/main.cjs:571`] |
 | Client-side audio analysis | Background Processing | `analyzeAudioFile` in `src/lib/audioAnalysis.ts` via Web Audio API | [VERIFIED: `src/lib/audioAnalysis.ts:292-313`] |
-| Track load to deck | User Action (Play) | `handleLoadTrack` in `App.tsx` -> `DeckPanel` HTML5 Audio element | [VERIFIED: `src/App.tsx:395-421`] |
+| Track load to deck | User Action (Play) | `handleLoadTrack` in `App.tsx` -> `DeckPanel` HTML5 Audio element | [VERIFIED: `src/App.tsx:378-404`] |
 
 ### 3.2 High-Level Data Movement
 
@@ -132,7 +134,7 @@ List of operations that SHOULD be traced in detail (in 02-code-flows.md):
 - **Folder scan + metadata parse** -- from dialog selection through walkMusicFiles to parseLocalTrack to renderer state
 - **Spotify PKCE OAuth flow** -- the full auth code + token exchange + local callback server lifecycle
 - **Library merge and matching** -- ISRC and fingerprint-based matching between local and Spotify tracks
-- **Analysis pipeline** -- queue management, buffer read via IPC, AudioContext decode, BPM/key/energy estimation, state update
+- **Analysis pipeline** -- queue management (ref-based mutex), buffer read via IPC, AudioContext decode, BPM/key/energy estimation, state update (see `pf-docs/02-code-flow-analysis-pipeline.md`)
 - **Transition suggestion scoring** -- scoreTransition algorithm with Camelot adjacency, BPM gap, energy delta
 - **Deck load and playback** -- from load action to blob URL creation to HTML5 audio control
 
@@ -144,13 +146,13 @@ In this Electron architecture, "frontend" is the React renderer process and "bac
 
 | Frontend Source | Trigger Type | Backend Target | Handler | Evidence |
 |-----------------|--------------|----------------|---------|----------|
-| `App.handleScanFolder()` | Button click | `ipcMain: library:select-folder` + `library:scan-folder` | `dialog.showOpenDialog`, `walkMusicFiles`, `parseLocalTrack` | [VERIFIED: `src/App.tsx:440-477`, `electron/main.cjs:530-556`] |
-| `App.readTrackBuffer()` | Analysis queue tick | `ipcMain: library:read-audio-file` | `fs.readFile` | [VERIFIED: `src/App.tsx:242-256`, `electron/main.cjs:558-561`] |
-| `App.handleSpotifyConnect()` | Button click | `ipcMain: spotify:login` | `startSpotifyAuth` (PKCE + local HTTP) | [VERIFIED: `src/App.tsx:490-508`, `electron/main.cjs:569`] |
-| `App.handleSpotifySync()` | Button click | `ipcMain: spotify:sync` | `importSpotifyLibrary` | [VERIFIED: `src/App.tsx:510-530`, `electron/main.cjs:571`] |
-| `App.handleSpotifyLogout()` | Button click | `ipcMain: spotify:logout` | Session clear | [VERIFIED: `src/App.tsx:532-538`, `electron/main.cjs:573-576`] |
-| `App.handleOpenExternal()` | Button click | `ipcMain: shell:open-external` | `shell.openExternal` | [VERIFIED: `src/App.tsx:391-393`, `electron/main.cjs:563-567`] |
-| Startup | App mount | `ipcMain: spotify:redirect-uri` | Returns constant URI | [VERIFIED: `src/App.tsx:198-200`, `electron/main.cjs:578`] |
+| `App.handleScanFolder()` | Button click | `ipcMain: library:select-folder` + `library:scan-folder` | `dialog.showOpenDialog`, `walkMusicFiles`, `parseLocalTrack` | [VERIFIED: `src/App.tsx:423-471`, `electron/main.cjs:530-556`] |
+| `App.readTrackBuffer()` | Analysis queue tick | `ipcMain: library:read-audio-file` | `fs.readFile` | [VERIFIED: `src/App.tsx:245-259`, `electron/main.cjs:558-561`] |
+| `App.handleSpotifyConnect()` | Button click | `ipcMain: spotify:login` | `startSpotifyAuth` (PKCE + local HTTP) | [VERIFIED: `src/App.tsx:473-491`, `electron/main.cjs:569`] |
+| `App.handleSpotifySync()` | Button click | `ipcMain: spotify:sync` | `importSpotifyLibrary` | [VERIFIED: `src/App.tsx:493-513`, `electron/main.cjs:571`] |
+| `App.handleSpotifyLogout()` | Button click | `ipcMain: spotify:logout` | Session clear | [VERIFIED: `src/App.tsx:515-521`, `electron/main.cjs:573-576`] |
+| `App.handleOpenExternal()` | Button click | `ipcMain: shell:open-external` | `shell.openExternal` | [VERIFIED: `src/App.tsx:374-376`, `electron/main.cjs:563-567`] |
+| Startup | App mount | `ipcMain: spotify:redirect-uri` | Returns constant URI | [VERIFIED: `src/App.tsx:202`, `electron/main.cjs:578`] |
 
 ---
 
@@ -168,7 +170,7 @@ peak-codex-dac/
 │   ├── App.tsx                # Root component (all state)
 │   ├── types.ts               # Shared TypeScript interfaces
 │   ├── vite-env.d.ts          # Global type declarations for window.appAPI
-│   ├── styles.css             # Single global stylesheet (dark theme)
+│   ├── styles.css             # Single global stylesheet ("Forest Night" dark theme)
 │   ├── components/
 │   │   ├── DeckPanel.tsx      # DJ deck with playback
 │   │   ├── Waveform.tsx       # SVG waveform visualization
@@ -178,6 +180,14 @@ peak-codex-dac/
 │   └── lib/
 │       ├── djEngine.ts        # DJ logic (merge, score, format, crates)
 │       └── audioAnalysis.ts   # Client-side BPM/key/energy analysis
+├── pf-docs/
+│   ├── 01-architecture-overview.md  # This document
+│   ├── 02-code-flow-analysis-pipeline.md
+│   ├── CODE-FLOW-RECOMMENDATIONS.md
+│   └── codemap.json                 # Structured code map
+├── dj-theme-playground.html   # Standalone theme visual playground (not app source)
+├── waveform-playground.html   # Standalone waveform visual playground (not app source)
+├── analysis-pipeline-flow.html # Analysis pipeline flow visualization (not app source)
 ├── index.html                 # HTML shell
 ├── package.json               # Dependencies and scripts
 ├── tsconfig.json              # TypeScript strict config
@@ -190,6 +200,8 @@ peak-codex-dac/
 - No pages/routing directory -- single-view architecture [VERIFIED]
 - `lib/` contains pure logic modules with no React dependencies (except `audioAnalysis.ts` using Web Audio API) [VERIFIED]
 - Single CSS file for the entire application, no CSS modules or CSS-in-JS [VERIFIED]
+- Standalone `*-playground.html` files in root are visual prototyping aids, not part of the built application [VERIFIED]
+- `pf-docs/` contains architecture documentation and code maps [VERIFIED]
 
 ---
 
@@ -236,9 +248,14 @@ No `.env` file or environment variable configuration. Spotify Client ID is enter
 ## 6. Known Issues & Risks
 
 ### 1. All State in Root App Component
-[VERIFIED: `src/App.tsx:84-116`]
+[VERIFIED: `src/App.tsx:84-119`]
 The `App` component manages 17+ pieces of `useState`, multiple refs, and all business logic callbacks. This is a monolithic state pattern that will become harder to maintain as the app grows. No state management library or context providers are used.
 [INFERRED: architectural risk as feature count increases]
+
+### 1b. Analysis Queue Deadlock (RESOLVED)
+[VERIFIED: `src/App.tsx:115-118, 320-372`]
+Previously, the analysis queue `useEffect` used `analyzingTrackId` (state) in its dependency array and referenced `localTracks` directly, causing the effect to self-cancel on every state update and deadlock the queue. This was fixed by introducing `analysisRunningRef` (a ref-based mutex at line 118) and `localTracksRef` (a ref mirror of `localTracks` at line 116) to remove reactive state from the dependency array. The effect now depends on `[analysisQueue, appendConsoleEntry, ensureAudioContext, publishError, readTrackBuffer]` and uses `analysisRunningRef.current` as the guard.
+[RESOLVED at commit `eb2e526`]
 
 ### 2. No Error Boundaries
 [NOT_FOUND: searched for "ErrorBoundary", "componentDidCatch" in `src/`]
@@ -286,7 +303,7 @@ The BPM estimation uses onset-envelope autocorrelation at a downsampled 11025 Hz
 | React mount | `createRoot().render(<App />)` | `src/main.tsx` | [VERIFIED] |
 | Scan music folder | Button click -> IPC | `library:select-folder` + `library:scan-folder` | [VERIFIED] |
 | Analyze all tracks | Button click | `handleAnalyzeAll()` in App | [VERIFIED] |
-| Analysis queue processor | `useEffect` on queue state | Reads buffer via IPC, runs `analyzeAudioFile` | [VERIFIED] |
+| Analysis queue processor | `useEffect` on `analysisQueue` with ref-based mutex (`analysisRunningRef`) | Reads buffer via IPC, runs `analyzeAudioFile`; uses `localTracksRef` to avoid stale closure | [VERIFIED: `src/App.tsx:320-372`] |
 | Load track to deck | Table button / suggestion button | `handleLoadTrack(deckId, trackId)` | [VERIFIED] |
 | Play/Pause | Transport button | `DeckPanel.handleTogglePlayback()` -> HTMLAudioElement | [VERIFIED] |
 | Sync deck | Transport button | `handleSyncDeck(deckId)` -> adjusts playbackRate | [VERIFIED] |
@@ -308,14 +325,14 @@ The BPM estimation uses onset-envelope autocorrelation at a downsampled 11025 Hz
 | UI Framework | React 19 | [VERIFIED: `package.json:16`] |
 | Language | TypeScript 5.9 (strict) | [VERIFIED: `tsconfig.json:10`] |
 | Build Tool | Vite 7 + SWC | [VERIFIED: `package.json:27`, `vite.config.ts`] |
-| Styling | Single global CSS file (custom dark theme, CSS custom properties) | [VERIFIED: `src/styles.css`] |
+| Styling | Single global CSS file — "Forest Night" theme (`#080e08` bg, `#7aff8a`/`#d4e157` accents, `#e0f0e4` text, 20px radius, 16px blur), IBM Plex Sans body font, CSS custom properties | [VERIFIED: `src/styles.css:1-22`] |
 | Audio Metadata | music-metadata 11 | [VERIFIED: `package.json:15`] |
 | Audio Analysis | Web Audio API (client-side BPM, key, energy, waveform) | [VERIFIED: `src/lib/audioAnalysis.ts`] |
 | Audio Playback | HTML5 `<audio>` element via Blob URLs | [VERIFIED: `src/components/DeckPanel.tsx:330`] |
 | External API | Spotify Web API (PKCE OAuth 2.0) | [VERIFIED: `electron/main.cjs:9`] |
 | IPC Bridge | Electron contextBridge + ipcMain/ipcRenderer | [VERIFIED: `electron/preload.cjs`] |
 | State Management | React useState/useRef/useMemo (no external library) | [VERIFIED: `src/App.tsx`] |
-| Data Persistence | localStorage (Spotify Client ID only) | [VERIFIED: `src/App.tsx:88, 194-196`] |
+| Data Persistence | localStorage (Spotify Client ID only) | [VERIFIED: `src/App.tsx:88, 198`] |
 
 ---
 
