@@ -113,6 +113,9 @@ export default function App() {
   const bufferCacheRef = useRef(new Map<string, ArrayBuffer>());
   const playbackUrlCacheRef = useRef(new Map<string, string>());
   const analysisWasActiveRef = useRef(false);
+  const localTracksRef = useRef(localTracks);
+  localTracksRef.current = localTracks;
+  const analysisRunningRef = useRef(false);
   const deferredSearch = useDeferredValue(searchText);
 
   const { tracks, crates } = useMemo(
@@ -315,29 +318,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (analyzingTrackId || analysisQueue.length === 0) {
+    if (analysisRunningRef.current || analysisQueue.length === 0) {
       return;
     }
 
     const nextTrackId = analysisQueue[0];
-    const track = localTracks.find((item) => item.id === nextTrackId);
+    const track = localTracksRef.current.find((item) => item.id === nextTrackId);
     if (!track || !track.filePath) {
       setAnalysisQueue((current) => current.filter((id) => id !== nextTrackId));
       return;
     }
 
-    let cancelled = false;
+    analysisRunningRef.current = true;
     setAnalyzingTrackId(nextTrackId);
     appendConsoleEntry('info', `Analyzing ${track.title} for BPM, key, waveform, and energy.`);
 
     void (async () => {
       try {
         const audioBuffer = await readTrackBuffer(track);
-        const analysis = await analyzeAudioFile(audioBuffer, ensureAudioContext());
-
-        if (cancelled) {
-          return;
-        }
+        const ctx = ensureAudioContext();
+        const analysis = await analyzeAudioFile(audioBuffer, ctx);
 
         setLocalTracks((current) =>
           current.map((item) => {
@@ -360,33 +360,16 @@ export default function App() {
             };
           })
         );
-        appendConsoleEntry('success', `Analyzed ${track.title}. ${analysisCompletedCount + 1}/${analysisTotalCount || 1} playable tracks complete.`);
+        appendConsoleEntry('success', `Analyzed ${track.title}.`);
       } catch (reason) {
-        if (!cancelled) {
-          publishError(reason instanceof Error ? reason.message : `Track analysis failed for ${track.title}.`);
-        }
+        publishError(reason instanceof Error ? reason.message : `Track analysis failed for ${track.title}.`);
       } finally {
-        if (!cancelled) {
-          setAnalyzingTrackId(null);
-          setAnalysisQueue((current) => current.filter((id) => id !== nextTrackId));
-        }
+        analysisRunningRef.current = false;
+        setAnalyzingTrackId(null);
+        setAnalysisQueue((current) => current.filter((id) => id !== nextTrackId));
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    analysisCompletedCount,
-    analysisQueue,
-    analysisTotalCount,
-    analyzingTrackId,
-    appendConsoleEntry,
-    ensureAudioContext,
-    localTracks,
-    publishError,
-    readTrackBuffer
-  ]);
+  }, [analysisQueue, appendConsoleEntry, ensureAudioContext, publishError, readTrackBuffer]);
 
   const handleOpenExternal = async (url: string) => {
     await window.appAPI.openExternal(url);
