@@ -160,6 +160,53 @@ p {
   margin-top: 18px;
 }
 
+.analysis-meter,
+.analysis-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.analysis-meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analysis-meter-head strong {
+  font-size: 0.94rem;
+}
+
+.analysis-meter-head span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.analysis-progress-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.analysis-progress-track.compact {
+  height: 8px;
+}
+
+.analysis-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), var(--amber));
+  box-shadow: 0 0 18px rgba(108, 255, 214, 0.18);
+}
+
 .stat-block {
   padding: 14px;
   border-radius: 18px;
@@ -349,6 +396,21 @@ code {
   min-width: 260px;
 }
 
+.library-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.library-search-field {
+  flex: 1 1 280px;
+}
+
+.library-search-field input {
+  min-width: 0;
+}
+
 .banner {
   display: flex;
   gap: 14px;
@@ -495,7 +557,11 @@ code {
 
 .library-table-wrap {
   min-width: 0;
+  max-height: 444px;
   overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.16);
 }
 
 .library-table {
@@ -513,10 +579,15 @@ code {
 }
 
 .library-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   color: var(--muted);
   font-size: 0.75rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  background: rgba(7, 13, 20, 0.94);
+  backdrop-filter: blur(12px);
 }
 
 .track-row:hover {
@@ -559,6 +630,63 @@ code {
   gap: 8px;
   padding: 28px 0;
   text-align: center;
+}
+
+.console-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+}
+
+.console-feed {
+  max-height: 240px;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.26);
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', 'Menlo', monospace;
+}
+
+.console-line {
+  display: grid;
+  grid-template-columns: 86px 64px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.console-time {
+  color: var(--muted);
+}
+
+.console-level {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.console-message {
+  color: var(--text);
+}
+
+.console-success .console-level {
+  color: var(--green);
+}
+
+.console-info .console-level {
+  color: var(--cyan);
+}
+
+.console-error .console-level {
+  color: var(--danger);
+}
+
+.console-empty {
+  padding: 18px 14px;
+  color: var(--muted);
 }
 
 .insight-panel {
@@ -609,6 +737,33 @@ code {
   color: var(--muted);
 }
 
+.crate-list,
+.library-table-wrap,
+.console-feed {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(108, 255, 214, 0.42) rgba(255, 255, 255, 0.06);
+}
+
+.crate-list::-webkit-scrollbar,
+.library-table-wrap::-webkit-scrollbar,
+.console-feed::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.crate-list::-webkit-scrollbar-track,
+.library-table-wrap::-webkit-scrollbar-track,
+.console-feed::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.crate-list::-webkit-scrollbar-thumb,
+.library-table-wrap::-webkit-scrollbar-thumb,
+.console-feed::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(108, 255, 214, 0.58), rgba(255, 181, 73, 0.58));
+  border-radius: 999px;
+}
+
 @media (max-width: 1480px) {
   .app-shell {
     grid-template-columns: 320px minmax(0, 1fr);
@@ -641,6 +796,10 @@ code {
     width: 100%;
     justify-content: flex-start;
   }
+
+  .library-toolbar {
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 780px) {
@@ -659,5 +818,10 @@ code {
   .deck-footer {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .console-line {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }

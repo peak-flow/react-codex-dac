@@ -13,6 +13,14 @@ interface SidebarProps {
     matched: number;
     analyzed: number;
   };
+  analysis: {
+    total: number;
+    completed: number;
+    pending: number;
+    percent: number;
+    active: boolean;
+    currentTrackTitle: string | null;
+  };
   scanning: boolean;
   syncingSpotify: boolean;
   onSelectCrate: (crateId: string) => void;
@@ -32,6 +40,7 @@ export function Sidebar({
   spotifyClientId,
   spotifyRedirectUri,
   stats,
+  analysis,
   scanning,
   syncingSpotify,
   onSelectCrate,
@@ -70,8 +79,24 @@ export function Sidebar({
             {scanning ? 'Scanning...' : 'Scan Music Folder'}
           </button>
           <button className="action-button" onClick={onAnalyzeAll} disabled={stats.playable === 0}>
-            Analyze All
+            Analyze All {analysis.pending > 0 ? `(${analysis.pending})` : ''}
           </button>
+        </div>
+        <div className="analysis-meter">
+          <div className="analysis-meter-head">
+            <strong>{analysis.currentTrackTitle ? `Analyzing ${analysis.currentTrackTitle}` : analysis.active ? 'Analysis in progress' : 'Analysis status'}</strong>
+            <span>{analysis.completed}/{analysis.total || 0}</span>
+          </div>
+          <div className="analysis-progress-track compact">
+            <span className="analysis-progress-fill" style={{ width: `${analysis.percent}%` }} />
+          </div>
+          <p className="muted">
+            {analysis.total > 0
+              ? analysis.pending > 0
+                ? `${analysis.pending} playable local tracks still need BPM, key, waveform, or energy analysis.`
+                : 'All playable local tracks currently have analysis data.'
+              : 'Scan a local folder to begin building analysis progress.'}
+          </p>
         </div>
         <p className="path-pill">{localFolderPath || 'No local folder scanned yet.'}</p>
       </section>

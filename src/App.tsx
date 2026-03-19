@@ -34,6 +34,15 @@ import type {
 } from './types';
 import './styles.css';
 
+type ConsoleLevel = 'info' | 'success' | 'error';
+
+interface ConsoleEntry {
+  id: string;
+  level: ConsoleLevel;
+  message: string;
+  timestamp: string;
+}
+
 const INITIAL_DECKS: Record<DeckId, DeckState> = {
   A: {
     deckId: 'A',
@@ -63,6 +72,14 @@ function bytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
+function createConsoleTimestamp() {
+  return new Date().toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
 export default function App() {
   const [localTracks, setLocalTracks] = useState<Track[]>([]);
   const [spotifyTracks, setSpotifyTracks] = useState<Track[]>([]);
@@ -83,10 +100,19 @@ export default function App() {
   const [isSpotifyBusy, setIsSpotifyBusy] = useState(false);
   const [notice, setNotice] = useState('Dual-deck workspace online. Scan a folder or sync Spotify to build the first crates.');
   const [error, setError] = useState<string | null>(null);
+  const [consoleEntries, setConsoleEntries] = useState<ConsoleEntry[]>(() => [
+    {
+      id: 'startup',
+      level: 'info',
+      message: 'Dual-deck workspace online. Scan a folder or sync Spotify to build the first crates.',
+      timestamp: createConsoleTimestamp()
+    }
+  ]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const bufferCacheRef = useRef(new Map<string, ArrayBuffer>());
   const playbackUrlCacheRef = useRef(new Map<string, string>());
+  const analysisWasActiveRef = useRef(false);
   const deferredSearch = useDeferredValue(searchText);
 
   const { tracks, crates } = useMemo(
@@ -125,7 +151,45 @@ export default function App() {
     [referenceTrack, tracks, decks.A.loadedTrackId, decks.B.loadedTrackId]
   );
 
+  const playableLocalTracks = useMemo(
+    () => localTracks.filter((track) => track.availability === 'playable'),
+    [localTracks]
+  );
   const analyzedCount = localTracks.filter((track) => !needsAnalysis(track)).length;
+  const analysisPendingCount = playableLocalTracks.filter((track) => needsAnalysis(track)).length;
+  const analysisTotalCount = playableLocalTracks.length;
+  const analysisCompletedCount = Math.max(0, analysisTotalCount - analysisPendingCount);
+  const analysisPercent = analysisTotalCount > 0 ? Math.round((analysisCompletedCount / analysisTotalCount) * 100) : 0;
+  const currentAnalyzingTrack = analyzingTrackId ? localTracks.find((track) => track.id === analyzingTrackId) || null : null;
+  const activeCrateName = crates.find((crate) => crate.id === selectedCrateId)?.name || 'All Tracks';
+
+  const appendConsoleEntry = useCallback((level: ConsoleLevel, message: string) => {
+    const entry: ConsoleEntry = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      level,
+      message,
+      timestamp: createConsoleTimestamp()
+    };
+
+    setConsoleEntries((current) => [entry, ...current].slice(0, 60));
+  }, []);
+
+  const publishNotice = useCallback(
+    (message: string, level: Exclude<ConsoleLevel, 'error'> = 'info') => {
+      setError(null);
+      setNotice(message);
+      appendConsoleEntry(level, message);
+    },
+    [appendConsoleEntry]
+  );
+
+  const publishError = useCallback(
+    (message: string) => {
+      setError(message);
+      appendConsoleEntry('error', message);
+    },
+    [appendConsoleEntry]
+  );
 
   useEffect(() => {
     localStorage.setItem('peak.spotifyClientId', spotifyClientId);
@@ -147,6 +211,24 @@ export default function App() {
       playbackUrlCacheRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    const analysisActive = Boolean(analyzingTrackId || analysisQueue.length > 0);
+
+    if (analysisActive) {
+      analysisWasActiveRef.current = true;
+      return;
+    }
+
+    if (analysisWasActiveRef.current && analysisTotalCount > 0) {
+      publishNotice(
+        `Analysis idle. ${analysisCompletedCount}/${analysisTotalCount} playable local tracks are now analyzed.`,
+        'success'
+      );
+    }
+
+    analysisWasActiveRef.current = false;
+  }, [analyzingTrackId, analysisQueue.length, analysisCompletedCount, analysisTotalCount, publishNotice]);
 
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -246,6 +328,7 @@ export default function App() {
 
     let cancelled = false;
     setAnalyzingTrackId(nextTrackId);
+    appendConsoleEntry('info', `Analyzing ${track.title} for BPM, key, waveform, and energy.`);
 
     void (async () => {
       try {
@@ -277,9 +360,10 @@ export default function App() {
             };
           })
         );
+        appendConsoleEntry('success', `Analyzed ${track.title}. ${analysisCompletedCount + 1}/${analysisTotalCount || 1} playable tracks complete.`);
       } catch (reason) {
         if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : 'Track analysis failed.');
+          publishError(reason instanceof Error ? reason.message : `Track analysis failed for ${track.title}.`);
         }
       } finally {
         if (!cancelled) {
@@ -292,7 +376,17 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [analysisQueue, analyzingTrackId, ensureAudioContext, localTracks, readTrackBuffer]);
+  }, [
+    analysisCompletedCount,
+    analysisQueue,
+    analysisTotalCount,
+    analyzingTrackId,
+    appendConsoleEntry,
+    ensureAudioContext,
+    localTracks,
+    publishError,
+    readTrackBuffer
+  ]);
 
   const handleOpenExternal = async (url: string) => {
     await window.appAPI.openExternal(url);
@@ -323,7 +417,7 @@ export default function App() {
         cuePoints: []
       }
     }));
-    setNotice(`Loaded ${track.title} onto Deck ${deckId}.`);
+    publishNotice(`Loaded ${track.title} onto Deck ${deckId}.`, 'success');
   };
 
   const handleSyncDeck = (deckId: DeckId) => {
@@ -331,7 +425,7 @@ export default function App() {
     const otherTrack = deckId === 'A' ? deckBTrack : deckATrack;
 
     if (!currentTrack?.bpm || !otherTrack?.bpm) {
-      setError('Both decks need BPM analysis before sync can lock to a target.');
+      publishError('Both decks need BPM analysis before sync can lock to a target.');
       return;
     }
 
@@ -340,7 +434,7 @@ export default function App() {
       playbackRate,
       syncEnabled: true
     });
-    setNotice(`Deck ${deckId} sync locked toward ${otherTrack.bpm.toFixed(1)} BPM.`);
+    publishNotice(`Deck ${deckId} sync locked toward ${otherTrack.bpm.toFixed(1)} BPM.`, 'success');
   };
 
   const handleScanFolder = async () => {
@@ -365,10 +459,18 @@ export default function App() {
       playbackUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
       playbackUrlCacheRef.current.clear();
       setDecks(INITIAL_DECKS);
-      queueTracksForAnalysis(scannedTracks.filter((track) => needsAnalysis(track)).map((track) => track.id), true);
-      setNotice(`Scanned ${scannedTracks.length} tracks from ${folderPath.split('/').filter(Boolean).pop()}.`);
+      const queuedIds = scannedTracks.filter((track) => needsAnalysis(track)).map((track) => track.id);
+      queueTracksForAnalysis(queuedIds, true);
+      publishNotice(`Scanned ${scannedTracks.length} tracks from ${folderPath.split('/').filter(Boolean).pop()}.`, 'success');
+      if (queuedIds.length > 0) {
+        appendConsoleEntry('info', `Queued ${queuedIds.length} local tracks for post-scan analysis.`);
+      }
+      const scanFallbackCount = scannedTracks.filter((track) => Boolean(track.scanError)).length;
+      if (scanFallbackCount > 0) {
+        appendConsoleEntry('error', `${scanFallbackCount} files fell back to basic metadata because tag parsing was incomplete.`);
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Music folder scan failed.');
+      publishError(reason instanceof Error ? reason.message : 'Music folder scan failed.');
     } finally {
       setIsScanning(false);
     }
@@ -376,13 +478,18 @@ export default function App() {
 
   const handleAnalyzeAll = () => {
     const analyzableIds = localTracks.filter((track) => needsAnalysis(track)).map((track) => track.id);
+    if (analyzableIds.length === 0) {
+      publishNotice('All playable local tracks already have analysis data.', 'success');
+      return;
+    }
+
     queueTracksForAnalysis(analyzableIds, true);
-    setNotice(`Queued ${analyzableIds.length} local tracks for BPM, key, energy, and waveform analysis.`);
+    publishNotice(`Queued ${analyzableIds.length} local tracks for BPM, key, energy, and waveform analysis.`);
   };
 
   const handleSpotifyConnect = async () => {
     if (!spotifyClientId.trim()) {
-      setError('Enter your Spotify Client ID first.');
+      publishError('Enter your Spotify Client ID first.');
       return;
     }
 
@@ -392,9 +499,9 @@ export default function App() {
     try {
       const session = await window.appAPI.spotifyLogin(spotifyClientId.trim());
       setSpotifyProfile(session.profile);
-      setNotice(`Spotify connected as ${session.profile.displayName}.`);
+      publishNotice(`Spotify connected as ${session.profile.displayName}.`, 'success');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Spotify connection failed.');
+      publishError(reason instanceof Error ? reason.message : 'Spotify connection failed.');
     } finally {
       setIsSpotifyBusy(false);
     }
@@ -414,9 +521,9 @@ export default function App() {
       });
 
       queueTracksForAnalysis(localTracks.filter((track) => needsAnalysis(track)).map((track) => track.id));
-      setNotice(`Spotify sync pulled ${payload.savedTracks.length} saved tracks and ${payload.playlists.length} playlists.`);
+      publishNotice(`Spotify sync pulled ${payload.savedTracks.length} saved tracks and ${payload.playlists.length} playlists.`, 'success');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Spotify import failed.');
+      publishError(reason instanceof Error ? reason.message : 'Spotify import failed.');
     } finally {
       setIsSpotifyBusy(false);
     }
@@ -427,7 +534,7 @@ export default function App() {
     setSpotifyProfile(null);
     setSpotifyTracks([]);
     setSpotifyPlaylists([]);
-    setNotice('Spotify connection cleared. Local DJ workflow stays intact.');
+    publishNotice('Spotify connection cleared. Local DJ workflow stays intact.');
   };
 
   return (
@@ -445,6 +552,14 @@ export default function App() {
           matched: tracks.filter((track) => track.source === 'matched').length,
           analyzed: analyzedCount
         }}
+        analysis={{
+          total: analysisTotalCount,
+          completed: analysisCompletedCount,
+          pending: analysisPendingCount,
+          percent: analysisPercent,
+          active: Boolean(analyzingTrackId || analysisQueue.length > 0),
+          currentTrackTitle: currentAnalyzingTrack?.title || null
+        }}
         scanning={isScanning}
         syncingSpotify={isSpotifyBusy}
         onSelectCrate={setSelectedCrateId}
@@ -461,46 +576,6 @@ export default function App() {
           <div>
             <p className="eyebrow">Desk View</p>
             <h1>Two-deck command center with smart crates, waveform intelligence, and library fusion.</h1>
-          </div>
-
-          <div className="topbar-controls">
-            <label className="search-field">
-              <span>Search</span>
-              <input
-                value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                placeholder="Find by title, artist, album, or tag"
-              />
-            </label>
-
-            <label className="select-field">
-              <span>Sort</span>
-              <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
-                <option value="artist">Artist</option>
-                <option value="title">Title</option>
-                <option value="album">Album</option>
-                <option value="bpm">BPM</option>
-                <option value="energy">Energy</option>
-                <option value="duration">Duration</option>
-                <option value="source">Source</option>
-              </select>
-            </label>
-
-            <label className="select-field">
-              <span>Filter</span>
-              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as SourceFilter)}>
-                <option value="all">All sources</option>
-                <option value="playable">Playable</option>
-                <option value="metadata-only">Metadata only</option>
-                <option value="local">Local only</option>
-                <option value="spotify">Spotify only</option>
-                <option value="matched">Matched</option>
-              </select>
-            </label>
-
-            <button className="sort-toggle" onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}>
-              {sortDirection === 'asc' ? 'Asc' : 'Desc'}
-            </button>
           </div>
         </header>
 
@@ -546,12 +621,92 @@ export default function App() {
               {analyzingTrackId ? `Analyzing ${trackMap.get(analyzingTrackId)?.title || 'track'}...` : `${analysisQueue.length} queued for analysis`}
             </span>
           </div>
+          <div className="library-toolbar">
+            <label className="search-field library-search-field">
+              <span>Search Library</span>
+              <input
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                placeholder="Find by title, artist, album, genre, or tag"
+              />
+            </label>
+
+            <label className="select-field">
+              <span>Sort</span>
+              <select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
+                <option value="artist">Artist</option>
+                <option value="title">Title</option>
+                <option value="album">Album</option>
+                <option value="bpm">BPM</option>
+                <option value="energy">Energy</option>
+                <option value="duration">Duration</option>
+                <option value="source">Source</option>
+              </select>
+            </label>
+
+            <label className="select-field">
+              <span>Filter</span>
+              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as SourceFilter)}>
+                <option value="all">All sources</option>
+                <option value="playable">Playable</option>
+                <option value="metadata-only">Metadata only</option>
+                <option value="local">Local only</option>
+                <option value="spotify">Spotify only</option>
+                <option value="matched">Matched</option>
+              </select>
+            </label>
+
+            <button className="sort-toggle" onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}>
+              {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+            </button>
+          </div>
+          <div className="analysis-status-card">
+            <div className="analysis-meter-head">
+              <strong>
+                {currentAnalyzingTrack
+                  ? `Analyzing ${currentAnalyzingTrack.title}`
+                  : analysisPendingCount > 0
+                    ? `${analysisPendingCount} tracks still need analysis`
+                    : 'Analysis complete'}
+              </strong>
+              <span>{analysisCompletedCount}/{analysisTotalCount || 0} ready</span>
+            </div>
+            <div className="analysis-progress-track">
+              <span className="analysis-progress-fill" style={{ width: `${analysisPercent}%` }} />
+            </div>
+            <p className="muted">
+              Crate: {activeCrateName}. The unified library viewport is locked to roughly five rows with a vertical scrollbar for tighter crate digging.
+            </p>
+          </div>
           <LibraryTable
             tracks={visibleTracks}
             analyzingTrackId={analyzingTrackId}
             onLoadTrack={handleLoadTrack}
             onOpenExternal={(url) => void handleOpenExternal(url)}
           />
+        </section>
+
+        <section className="panel console-panel">
+          <div className="panel-title-row">
+            <div>
+              <p className="eyebrow">System Console</p>
+              <h2>Operator Log</h2>
+            </div>
+            <span className="muted">{consoleEntries.length} recent events</span>
+          </div>
+          <div className="console-feed">
+            {consoleEntries.length > 0 ? (
+              consoleEntries.map((entry) => (
+                <div key={entry.id} className={`console-line console-${entry.level}`}>
+                  <span className="console-time">{entry.timestamp}</span>
+                  <span className="console-level">{entry.level.toUpperCase()}</span>
+                  <span className="console-message">{entry.message}</span>
+                </div>
+              ))
+            ) : (
+              <div className="console-empty">No console events yet.</div>
+            )}
+          </div>
         </section>
       </main>
 
