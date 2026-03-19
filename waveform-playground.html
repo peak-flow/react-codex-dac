@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frequency-Colored Waveform Playground</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{color-scheme:dark}
+body{
+  font-family:-apple-system,'Segoe UI',system-ui,sans-serif;
+  background:#0a0e14;color:#e0e8f0;min-height:100vh;
+  display:grid;grid-template-columns:320px minmax(0,1fr);
+}
+/* ── Controls ── */
+.controls{
+  background:#0d1117;border-right:1px solid rgba(255,255,255,.06);
+  padding:20px 18px;overflow-y:auto;max-height:100vh;
+  display:flex;flex-direction:column;gap:16px;
+}
+.controls h1{font-size:1rem;letter-spacing:.03em}
+.controls .sub{color:#5a6a7d;font-size:.75rem;margin-bottom:4px}
+.group{display:flex;flex-direction:column;gap:8px}
+.group-title{
+  font-size:.65rem;letter-spacing:.16em;text-transform:uppercase;
+  color:#4a5a6d;border-bottom:1px solid rgba(255,255,255,.05);padding-bottom:5px;
+}
+.field{display:flex;flex-direction:column;gap:3px}
+.field label{font-size:.72rem;color:#7a8a9e;display:flex;justify-content:space-between}
+.field label .val{color:#4a5a6d;font-family:'SF Mono',Consolas,monospace;font-size:.68rem}
+.field input[type="range"]{width:100%;accent-color:#7aff8a;height:6px}
+.field input[type="color"]{
+  width:100%;height:28px;border:1px solid rgba(255,255,255,.08);
+  border-radius:6px;background:transparent;cursor:pointer;padding:1px;
+}
+.field select{
+  background:#161b22;color:#e0e8f0;border:1px solid rgba(255,255,255,.08);
+  border-radius:6px;padding:6px 8px;font-size:.78rem;
+}
+.row{display:flex;gap:6px}
+.row .field{flex:1}
+.toggle-row{display:flex;align-items:center;gap:8px;font-size:.78rem;color:#8a9aae}
+.toggle-row input[type="checkbox"]{accent-color:#7aff8a;width:16px;height:16px}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.preset-btn{
+  padding:8px 6px;border:1px solid rgba(255,255,255,.06);
+  border-radius:8px;background:rgba(255,255,255,.02);color:#b0bcc8;
+  cursor:pointer;font-size:.72rem;text-align:center;transition:all .12s;
+}
+.preset-btn:hover{border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.04)}
+.preset-btn.active{border-color:rgba(122,255,138,.4);background:rgba(122,255,138,.06);color:#fff}
+.collapsible-toggle{
+  font-size:.72rem;color:#5a7a6e;cursor:pointer;background:none;border:none;
+  text-align:left;padding:4px 0;text-decoration:underline;
+}
+.collapsible{display:none;flex-direction:column;gap:8px}
+.collapsible.open{display:flex}
+/* ── Right column ── */
+.right-col{display:flex;flex-direction:column;overflow:hidden}
+.preview-area{flex:1;display:flex;flex-direction:column;gap:16px;padding:24px;overflow-y:auto}
+.preview-section{display:flex;flex-direction:column;gap:6px}
+.preview-label{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:#4a5a6d}
+.canvas-wrap{
+  border-radius:12px;border:1px solid rgba(255,255,255,.06);
+  background:rgba(0,0,0,.3);overflow:hidden;position:relative;
+}
+.canvas-wrap canvas{display:block;width:100%}
+.legend{
+  position:absolute;top:8px;right:10px;display:flex;flex-direction:column;gap:2px;
+  background:rgba(0,0,0,.6);border-radius:6px;padding:6px 8px;
+  font-size:.6rem;color:#8a9aae;backdrop-filter:blur(6px);
+}
+.legend-item{display:flex;align-items:center;gap:5px}
+.legend-swatch{width:10px;height:10px;border-radius:2px}
+/* ── Prompt ── */
+.prompt-area{
+  border-top:1px solid rgba(255,255,255,.06);
+  background:#0d1117;padding:14px 18px;
+}
+.prompt-area h3{font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:#4a5a6d;margin-bottom:6px}
+.prompt-text{
+  font-family:'SF Mono',Consolas,monospace;font-size:.74rem;color:#b0bcc8;line-height:1.55;
+  background:#161b22;border:1px solid rgba(255,255,255,.05);
+  border-radius:8px;padding:12px;white-space:pre-wrap;max-height:130px;overflow-y:auto;
+}
+.copy-btn{
+  margin-top:6px;padding:6px 14px;border:1px solid rgba(122,255,138,.25);
+  border-radius:6px;background:rgba(122,255,138,.06);color:#7aff8a;
+  cursor:pointer;font-size:.74rem;transition:all .12s;
+}
+.copy-btn:hover{background:rgba(122,255,138,.14)}
+@media(max-width:900px){
+  body{grid-template-columns:1fr}
+  .controls{max-height:none;border-right:0;border-bottom:1px solid rgba(255,255,255,.06)}
+}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div>
+    <h1>Waveform Lab</h1>
+    <p class="sub">Explore frequency-colored waveform styles for Peak DJ</p>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Presets</div>
+    <div class="presets" id="presets"></div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Frequency Colors</div>
+    <div class="row">
+      <div class="field"><label>Bass (Low) <span class="val" id="vBass"></span></label><input type="color" id="cBass" value="#ff2d2d"></div>
+      <div class="field"><label>Low-Mid <span class="val" id="vLowMid"></span></label><input type="color" id="cLowMid" value="#ff8c00"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Mid <span class="val" id="vMid"></span></label><input type="color" id="cMid" value="#e8e820"></div>
+      <div class="field"><label>High-Mid <span class="val" id="vHighMid"></span></label><input type="color" id="cHighMid" value="#20d4a0"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Treble (High) <span class="val" id="vTreble"></span></label><input type="color" id="cTreble" value="#6060ff"></div>
+      <div class="field"><label>Ultra-High <span class="val" id="vUltra"></span></label><input type="color" id="cUltra" value="#c040ff"></div>
+    </div>
+    <div class="field">
+      <label>Color Blending <span class="val" id="vBlend"></span></label>
+      <input type="range" id="rBlend" min="0" max="100" value="60">
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Waveform Shape</div>
+    <div class="field">
+      <label>Bar Width <span class="val" id="vBarW"></span></label>
+      <input type="range" id="rBarW" min="1" max="12" value="3">
+    </div>
+    <div class="field">
+      <label>Bar Gap <span class="val" id="vGap"></span></label>
+      <input type="range" id="rGap" min="0" max="6" value="1">
+    </div>
+    <div class="field">
+      <label>Height <span class="val" id="vHeight"></span></label>
+      <input type="range" id="rHeight" min="80" max="300" value="180">
+    </div>
+    <div class="field">
+      <label>Roundness <span class="val" id="vRound"></span></label>
+      <input type="range" id="rRound" min="0" max="100" value="50">
+    </div>
+    <div class="field">
+      <label>Render Style</label>
+      <select id="sStyle">
+        <option value="bars">Bars</option>
+        <option value="blocks">Blocks (stepped)</option>
+        <option value="line">Continuous line</option>
+        <option value="filled">Filled area</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Display</div>
+    <div class="toggle-row"><input type="checkbox" id="tMirror"> Mirror (symmetric)</div>
+    <div class="toggle-row"><input type="checkbox" id="tEnvelope"> Envelope overlay</div>
+    <div class="toggle-row"><input type="checkbox" id="tCenterLine"> Center line</div>
+    <div class="toggle-row"><input type="checkbox" id="tGlow" checked> Glow effect</div>
+    <div class="field">
+      <label>Background <span class="val" id="vBg"></span></label>
+      <input type="color" id="cBg" value="#0a0e14">
+    </div>
+    <div class="field">
+      <label>Glow Intensity <span class="val" id="vGlow"></span></label>
+      <input type="range" id="rGlow" min="0" max="100" value="40">
+    </div>
+  </div>
+
+  <button class="collapsible-toggle" onclick="document.getElementById('advanced').classList.toggle('open')">Advanced options ▾</button>
+  <div class="collapsible" id="advanced">
+    <div class="group">
+      <div class="group-title">Frequency Distribution</div>
+      <div class="field">
+        <label>Bass Weight <span class="val" id="vBassW"></span></label>
+        <input type="range" id="rBassW" min="10" max="80" value="35">
+      </div>
+      <div class="field">
+        <label>Mid Weight <span class="val" id="vMidW"></span></label>
+        <input type="range" id="rMidW" min="10" max="80" value="40">
+      </div>
+      <div class="field">
+        <label>Treble Weight <span class="val" id="vTrebW"></span></label>
+        <input type="range" id="rTrebW" min="5" max="60" value="25">
+      </div>
+      <div class="field">
+        <label>Envelope Smoothing <span class="val" id="vSmooth"></span></label>
+        <input type="range" id="rSmooth" min="1" max="20" value="6">
+      </div>
+      <div class="field">
+        <label>Envelope Color <span class="val" id="vEnvC"></span></label>
+        <input type="color" id="cEnvelope" value="#ffffff">
+      </div>
+      <div class="field">
+        <label>Envelope Opacity <span class="val" id="vEnvO"></span></label>
+        <input type="range" id="rEnvO" min="10" max="100" value="50">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="right-col">
+<div class="preview-area">
+  <div class="preview-section">
+    <span class="preview-label">Frequency-Colored Waveform</span>
+    <div class="canvas-wrap">
+      <canvas id="cvMain"></canvas>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+  <div class="preview-section">
+    <span class="preview-label">Standard (Amplitude Only) — for comparison</span>
+    <div class="canvas-wrap">
+      <canvas id="cvStd"></canvas>
+    </div>
+  </div>
+</div>
+<div class="prompt-area">
+  <h3>Generated Prompt</h3>
+  <div class="prompt-text" id="promptOutput"></div>
+  <button class="copy-btn" id="copyBtn">Copy Prompt</button>
+</div>
+</div>
+
+<script>
+// ── Defaults ──
+const DEFAULTS = {
+  bass:'#ff2d2d',lowMid:'#ff8c00',mid:'#e8e820',highMid:'#20d4a0',treble:'#6060ff',ultra:'#c040ff',
+  blend:60,barW:3,gap:1,height:180,round:50,style:'bars',
+  mirror:false,envelope:false,centerLine:false,glow:true,bg:'#0a0e14',glowInt:40,
+  bassW:35,midW:40,trebW:25,smooth:6,envColor:'#ffffff',envOpacity:50
+};
+
+const PRESETS = {
+  'Rekordbox':{
+    bass:'#e03030',lowMid:'#e87020',mid:'#d0c820',highMid:'#30b0e0',treble:'#3060e0',ultra:'#8040d0',
+    blend:70,barW:2,gap:0,height:180,round:0,style:'bars',
+    mirror:false,envelope:false,centerLine:false,glow:false,bg:'#0a0a0a',glowInt:0,
+    bassW:40,midW:35,trebW:25,smooth:4,envColor:'#ffffff',envOpacity:40
+  },
+  'Serato':{
+    bass:'#0066ff',lowMid:'#0088ff',mid:'#00aaff',highMid:'#aaaaaa',treble:'#cccccc',ultra:'#eeeeee',
+    blend:40,barW:2,gap:0,height:160,round:0,style:'bars',
+    mirror:false,envelope:false,centerLine:false,glow:true,bg:'#111111',glowInt:30,
+    bassW:45,midW:35,trebW:20,smooth:5,envColor:'#ffffff',envOpacity:30
+  },
+  'Traktor':{
+    bass:'#ff4400',lowMid:'#ff8800',mid:'#ffcc00',highMid:'#88ff00',treble:'#00ccff',ultra:'#aa66ff',
+    blend:55,barW:3,gap:1,height:180,round:40,style:'bars',
+    mirror:true,envelope:false,centerLine:true,glow:true,bg:'#0c0c0c',glowInt:35,
+    bassW:38,midW:37,trebW:25,smooth:6,envColor:'#ffffff',envOpacity:40
+  },
+  'Ableton':{
+    bass:'#1ba8f0',lowMid:'#1bc8d0',mid:'#1be0a0',highMid:'#a0e060',treble:'#e0c040',ultra:'#e08040',
+    blend:50,barW:2,gap:0,height:140,round:0,style:'filled',
+    mirror:false,envelope:true,centerLine:false,glow:false,bg:'#1e1e1e',glowInt:0,
+    bassW:30,midW:45,trebW:25,smooth:8,envColor:'#ffffff',envOpacity:60
+  },
+  'Neon DJ':{
+    bass:'#ff0066',lowMid:'#ff3399',mid:'#ff66cc',highMid:'#cc66ff',treble:'#6633ff',ultra:'#3300ff',
+    blend:80,barW:4,gap:1,height:200,round:80,style:'bars',
+    mirror:true,envelope:true,centerLine:false,glow:true,bg:'#060010',glowInt:80,
+    bassW:35,midW:35,trebW:30,smooth:5,envColor:'#ff66cc',envOpacity:40
+  },
+  'Vinyl Warm':{
+    bass:'#c45030',lowMid:'#d08040',mid:'#c8a050',highMid:'#a09060',treble:'#808070',ultra:'#606058',
+    blend:65,barW:3,gap:1,height:160,round:30,style:'bars',
+    mirror:false,envelope:true,centerLine:false,glow:false,bg:'#1a1410',glowInt:0,
+    bassW:45,midW:35,trebW:20,smooth:10,envColor:'#d0c0a0',envOpacity:55
+  },
+  'Forest Night':{
+    bass:'#d4e157',lowMid:'#a0d840',mid:'#60e070',highMid:'#40d8a0',treble:'#30c0c0',ultra:'#7aff8a',
+    blend:60,barW:3,gap:1,height:180,round:50,style:'bars',
+    mirror:false,envelope:false,centerLine:false,glow:true,bg:'#080e08',glowInt:40,
+    bassW:35,midW:40,trebW:25,smooth:6,envColor:'#e0f0e4',envOpacity:50
+  },
+  'Ice Minimal':{
+    bass:'#a0d0ff',lowMid:'#b0e0ff',mid:'#c0f0ff',highMid:'#d0f0ff',treble:'#e0f8ff',ultra:'#f0fcff',
+    blend:30,barW:1,gap:1,height:120,round:0,style:'line',
+    mirror:false,envelope:false,centerLine:true,glow:false,bg:'#0a1018',glowInt:0,
+    bassW:30,midW:40,trebW:30,smooth:12,envColor:'#ffffff',envOpacity:30
+  }
+};
+
+const state = {...DEFAULTS};
+let activePreset = 'Forest Night';
+
+// ── Simulated frequency data ──
+// Generate realistic-looking waveform data with frequency bands
+const BARS = 400;
+const freqData = generateTrackData();
+
+function generateTrackData(){
+  const data = [];
+  // Simulate a DJ track: intro → build → drop → break → drop → outro
+  for(let i=0;i<BARS;i++){
+    const t = i/BARS;
+    // Energy envelope
+    let energy;
+    if(t<0.08) energy=0.15+t*3; // intro ramp
+    else if(t<0.22) energy=0.4+Math.sin(t*20)*0.15; // build
+    else if(t<0.25) energy=0.5+t*1.5; // buildup
+    else if(t<0.5) energy=0.7+Math.sin(t*8)*0.2; // drop
+    else if(t<0.55) energy=0.5-((t-0.5)*6); // break start
+    else if(t<0.7) energy=0.2+Math.sin(t*15)*0.1; // break
+    else if(t<0.73) energy=0.3+(t-0.7)*10; // build 2
+    else if(t<0.92) energy=0.75+Math.sin(t*7)*0.18; // drop 2
+    else energy=0.6*(1-(t-0.92)/0.08); // outro
+
+    energy=Math.max(0.05,Math.min(1,energy));
+
+    // Frequency bands with musical character
+    const kick = (Math.sin(i*0.8)+1)*0.5; // bass pulse
+    const snare = Math.max(0,(Math.sin(i*1.6+2)-0.3)); // mid transients
+    const hihat = Math.abs(Math.sin(i*3.2+1))*0.6; // high steady
+    const sub = (Math.sin(i*0.3)+1)*0.4; // sub bass rumble
+
+    const bass = energy * (0.5+sub*0.3+kick*0.2) * (0.6+Math.random()*0.4);
+    const lowMid = energy * (0.3+kick*0.15+snare*0.2) * (0.5+Math.random()*0.5);
+    const mid = energy * (0.25+snare*0.35) * (0.4+Math.random()*0.6);
+    const highMid = energy * (0.2+hihat*0.3+snare*0.15) * (0.3+Math.random()*0.7);
+    const treble = energy * (0.15+hihat*0.4) * (0.3+Math.random()*0.7);
+    const ultra = energy * hihat * 0.3 * (0.2+Math.random()*0.8);
+
+    data.push({
+      amplitude: energy*(0.5+Math.random()*0.5),
+      bass: Math.min(1,bass),
+      lowMid: Math.min(1,lowMid),
+      mid: Math.min(1,mid),
+      highMid: Math.min(1,highMid),
+      treble: Math.min(1,treble),
+      ultra: Math.min(1,ultra)
+    });
+  }
+  return data;
+}
+
+// ── Helpers ──
+function hexToRgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),16),b:parseInt(h.slice(5,7),16)}}
+function lerpColor(c1,c2,t){
+  const a=hexToRgb(c1),b=hexToRgb(c2);
+  return `rgb(${Math.round(a.r+(b.r-a.r)*t)},${Math.round(a.g+(b.g-a.g)*t)},${Math.round(a.b+(b.b-a.b)*t)})`;
+}
+
+function getBarColor(d,i){
+  const s=state;
+  const bw=s.bassW/100, mw=s.midW/100, tw=s.trebW/100;
+  const total=d.bass*bw + d.lowMid*bw*0.6 + d.mid*mw + d.highMid*mw*0.6 + d.treble*tw + d.ultra*tw*0.5;
+  if(total===0) return s.bass;
+
+  const weights=[
+    {c:s.bass, w:d.bass*bw},
+    {c:s.lowMid, w:d.lowMid*bw*0.6},
+    {c:s.mid, w:d.mid*mw},
+    {c:s.highMid, w:d.highMid*mw*0.6},
+    {c:s.treble, w:d.treble*tw},
+    {c:s.ultra, w:d.ultra*tw*0.5}
+  ];
+
+  const blend = s.blend/100;
+  let r=0,g=0,b=0;
+  for(const {c,w} of weights){
+    const rgb=hexToRgb(c);
+    const nw=w/total;
+    r+=rgb.r*nw; g+=rgb.g*nw; b+=rgb.b*nw;
+  }
+
+  // Find dominant band for sharp mode
+  let maxW=0, maxC=s.bass;
+  for(const {c,w} of weights){ if(w>maxW){maxW=w;maxC=c;} }
+  const dom=hexToRgb(maxC);
+  r=dom.r+(r-dom.r)*blend;
+  g=dom.g+(g-dom.g)*blend;
+  b=dom.b+(b-dom.b)*blend;
+
+  return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+}
+
+// ── Build presets ──
+const presetsEl=document.getElementById('presets');
+Object.keys(PRESETS).forEach(name=>{
+  const btn=document.createElement('button');
+  btn.className='preset-btn';btn.textContent=name;
+  btn.onclick=()=>applyPreset(name);
+  presetsEl.appendChild(btn);
+});
+
+function applyPreset(name){
+  activePreset=name;
+  Object.assign(state,PRESETS[name]);
+  syncControls();
+  updateAll();
+}
+
+// ── Sync controls ↔ state ──
+const CTRL_MAP = {
+  cBass:'bass',cLowMid:'lowMid',cMid:'mid',cHighMid:'highMid',cTreble:'treble',cUltra:'ultra',
+  cBg:'bg',cEnvelope:'envColor',
+  rBlend:'blend',rBarW:'barW',rGap:'gap',rHeight:'height',rRound:'round',
+  rGlow:'glowInt',rBassW:'bassW',rMidW:'midW',rTrebW:'trebW',rSmooth:'smooth',rEnvO:'envOpacity',
+  sStyle:'style',
+  tMirror:'mirror',tEnvelope:'envelope',tCenterLine:'centerLine',tGlow:'glow'
+};
+
+function syncControls(){
+  for(const[id,key] of Object.entries(CTRL_MAP)){
+    const el=document.getElementById(id);
+    if(!el) continue;
+    if(el.type==='checkbox') el.checked=state[key];
+    else el.value=state[key];
+  }
+}
+
+// Wire all controls
+for(const[id,key] of Object.entries(CTRL_MAP)){
+  const el=document.getElementById(id);
+  if(!el) continue;
+  const evt = el.type==='checkbox'?'change': el.tagName==='SELECT'?'change':'input';
+  el.addEventListener(evt,e=>{
+    state[key]=el.type==='checkbox'?el.checked: el.type==='range'?+el.value: el.value;
+    activePreset='Custom';
+    updateAll();
+  });
+}
+
+// ── Render ──
+function renderWaveform(canvasId, colored){
+  const c=document.getElementById(canvasId);
+  const dpr=window.devicePixelRatio||1;
+  const rect=c.parentElement.getBoundingClientRect();
+  const w=rect.width;
+  const h=state.height;
+  c.style.height=h+'px';
+  c.width=w*dpr; c.height=h*dpr;
+  const ctx=c.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,w,h);
+
+  // Background
+  ctx.fillStyle=state.bg;
+  ctx.fillRect(0,0,w,h);
+
+  const barW=state.barW;
+  const gap=state.gap;
+  const step=barW+gap;
+  const barCount=Math.floor(w/step);
+  const dataStep=BARS/barCount;
+  const centerY=state.mirror?h/2:h;
+  const maxH=state.mirror?h/2-4:h-8;
+  const roundFrac=state.round/100;
+
+  // Center line
+  if(state.centerLine && state.mirror){
+    ctx.strokeStyle='rgba(255,255,255,0.1)';
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,centerY);ctx.lineTo(w,centerY);ctx.stroke();
+  }
+
+  // Envelope data
+  const envPoints=[];
+
+  if(state.style==='line'||state.style==='filled'){
+    // Continuous rendering
+    ctx.beginPath();
+    const points=[];
+    for(let i=0;i<barCount;i++){
+      const di=Math.floor(i*dataStep);
+      const d=freqData[Math.min(di,BARS-1)];
+      const amp=d.amplitude;
+      const x=i*step+barW/2;
+      const bh=amp*maxH;
+      points.push({x,y:centerY-bh,amp,d,bh});
+    }
+
+    if(state.style==='filled'){
+      // Top fill
+      ctx.beginPath();
+      ctx.moveTo(points[0].x,centerY);
+      for(const p of points) ctx.lineTo(p.x,p.y);
+      ctx.lineTo(points[points.length-1].x,centerY);
+      ctx.closePath();
+      if(colored){
+        const grad=ctx.createLinearGradient(0,0,w,0);
+        for(let i=0;i<points.length;i+=Math.max(1,Math.floor(points.length/20))){
+          grad.addColorStop(i/points.length,getBarColor(points[i].d,i));
+        }
+        ctx.fillStyle=grad;
+      } else {
+        ctx.fillStyle='rgba(180,210,220,0.7)';
+      }
+      ctx.fill();
+
+      if(state.mirror){
+        ctx.beginPath();
+        ctx.moveTo(points[0].x,centerY);
+        for(const p of points) ctx.lineTo(p.x,centerY+p.bh);
+        ctx.lineTo(points[points.length-1].x,centerY);
+        ctx.closePath();
+        ctx.globalAlpha=0.6;ctx.fill();ctx.globalAlpha=1;
+      }
+    } else {
+      // Line
+      ctx.beginPath();
+      ctx.moveTo(points[0].x,points[0].y);
+      for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x,points[i].y);
+      ctx.strokeStyle=colored?getBarColor(points[Math.floor(points.length/2)].d,0):'rgba(180,210,220,0.8)';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+      if(state.mirror){
+        ctx.beginPath();
+        ctx.moveTo(points[0].x,centerY+points[0].bh);
+        for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x,centerY+points[i].bh);
+        ctx.globalAlpha=0.5;ctx.stroke();ctx.globalAlpha=1;
+      }
+    }
+    for(const p of points) envPoints.push({x:p.x,y:p.y});
+  } else {
+    // Bars / blocks
+    for(let i=0;i<barCount;i++){
+      const di=Math.floor(i*dataStep);
+      const d=freqData[Math.min(di,BARS-1)];
+      const amp=d.amplitude;
+      const x=i*step;
+      const bh=amp*maxH;
+
+      const color=colored?getBarColor(d,i):'rgba(180,210,220,0.7)';
+
+      if(state.glow && colored && state.glowInt>0){
+        ctx.shadowColor=color;
+        ctx.shadowBlur=state.glowInt*0.15;
+      } else {
+        ctx.shadowColor='transparent';ctx.shadowBlur=0;
+      }
+
+      ctx.fillStyle=color;
+
+      if(state.style==='blocks'){
+        const blockH=4;
+        const blocks=Math.ceil(bh/blockH);
+        for(let b=0;b<blocks;b++){
+          const by=centerY-b*blockH-blockH;
+          ctx.fillRect(x,by,barW,blockH-1);
+          if(state.mirror) ctx.fillRect(x,centerY+b*blockH+1,barW,blockH-1);
+        }
+      } else {
+        const r=roundFrac*barW/2;
+        if(r>0.5){
+          roundRect(ctx,x,centerY-bh,barW,bh,r);
+          ctx.fill();
+          if(state.mirror){
+            ctx.globalAlpha=0.65;
+            roundRect(ctx,x,centerY,barW,bh,r);
+            ctx.fill();
+            ctx.globalAlpha=1;
+          }
+        } else {
+          ctx.fillRect(x,centerY-bh,barW,bh);
+          if(state.mirror){
+            ctx.globalAlpha=0.65;
+            ctx.fillRect(x,centerY,barW,bh);
+            ctx.globalAlpha=1;
+          }
+        }
+      }
+
+      ctx.shadowColor='transparent';ctx.shadowBlur=0;
+      envPoints.push({x:x+barW/2,y:centerY-bh});
+    }
+  }
+
+  // Envelope overlay
+  if(state.envelope && envPoints.length>1){
+    const sm=state.smooth;
+    const smoothed=envPoints.map((_,idx)=>{
+      let sum=0,cnt=0;
+      for(let j=-sm;j<=sm;j++){
+        const k=idx+j;
+        if(k>=0&&k<envPoints.length){sum+=envPoints[k].y;cnt++;}
+      }
+      return{x:envPoints[idx].x,y:sum/cnt};
+    });
+    ctx.beginPath();
+    ctx.moveTo(smoothed[0].x,smoothed[0].y);
+    for(let i=1;i<smoothed.length;i++){
+      const prev=smoothed[i-1],curr=smoothed[i];
+      const cpx=(prev.x+curr.x)/2;
+      ctx.quadraticCurveTo(prev.x,prev.y,cpx,(prev.y+curr.y)/2);
+    }
+    ctx.lineTo(smoothed[smoothed.length-1].x,smoothed[smoothed.length-1].y);
+    ctx.strokeStyle=state.envColor;
+    ctx.globalAlpha=state.envOpacity/100;
+    ctx.lineWidth=1.5;
+    ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h);ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+function updateLegend(){
+  const leg=document.getElementById('legend');
+  const bands=[
+    {label:'Bass (Low)',color:state.bass},
+    {label:'Low-Mid',color:state.lowMid},
+    {label:'Mid',color:state.mid},
+    {label:'High-Mid',color:state.highMid},
+    {label:'Treble (High)',color:state.treble},
+    {label:'Ultra-High',color:state.ultra},
+  ];
+  leg.innerHTML=bands.map(b=>`<div class="legend-item"><div class="legend-swatch" style="background:${b.color}"></div>${b.label}</div>`).join('');
+}
+
+function updateValues(){
+  document.getElementById('vBass').textContent=state.bass;
+  document.getElementById('vLowMid').textContent=state.lowMid;
+  document.getElementById('vMid').textContent=state.mid;
+  document.getElementById('vHighMid').textContent=state.highMid;
+  document.getElementById('vTreble').textContent=state.treble;
+  document.getElementById('vUltra').textContent=state.ultra;
+  document.getElementById('vBlend').textContent=state.blend+'%';
+  document.getElementById('vBarW').textContent=state.barW+'px';
+  document.getElementById('vGap').textContent=state.gap+'px';
+  document.getElementById('vHeight').textContent=state.height+'px';
+  document.getElementById('vRound').textContent=state.round+'%';
+  document.getElementById('vBg').textContent=state.bg;
+  document.getElementById('vGlow').textContent=state.glowInt+'%';
+  document.getElementById('vBassW').textContent=state.bassW+'%';
+  document.getElementById('vMidW').textContent=state.midW+'%';
+  document.getElementById('vTrebW').textContent=state.trebW+'%';
+  document.getElementById('vSmooth').textContent=state.smooth;
+  document.getElementById('vEnvC').textContent=state.envColor;
+  document.getElementById('vEnvO').textContent=state.envOpacity+'%';
+}
+
+function updatePrompt(){
+  const s=state, d=DEFAULTS, parts=[];
+
+  if(activePreset!=='Custom'){
+    parts.push(`Apply the "${activePreset}" frequency-colored waveform style`);
+  }
+
+  // Colors
+  const colorChanges=[];
+  if(s.bass!==d.bass) colorChanges.push(`bass=${s.bass}`);
+  if(s.lowMid!==d.lowMid) colorChanges.push(`low-mid=${s.lowMid}`);
+  if(s.mid!==d.mid) colorChanges.push(`mid=${s.mid}`);
+  if(s.highMid!==d.highMid) colorChanges.push(`high-mid=${s.highMid}`);
+  if(s.treble!==d.treble) colorChanges.push(`treble=${s.treble}`);
+  if(s.ultra!==d.ultra) colorChanges.push(`ultra-high=${s.ultra}`);
+  if(colorChanges.length) parts.push(`Frequency color map: ${colorChanges.join(', ')}`);
+
+  if(s.blend!==d.blend) parts.push(`Color blending at ${s.blend}% (${s.blend<30?'sharp per-band colors':s.blend>70?'smooth gradient blending':'moderate blending'})`);
+  if(s.barW!==d.barW) parts.push(`Bar width ${s.barW}px`);
+  if(s.gap!==d.gap) parts.push(`Bar gap ${s.gap}px`);
+  if(s.height!==d.height) parts.push(`Waveform height ${s.height}px`);
+  if(s.round!==d.round) parts.push(`Bar roundness ${s.round}% (${s.round===0?'sharp rectangles':s.round>80?'pill-shaped':'rounded'})`);
+  if(s.style!==d.style){
+    const labels={blocks:'stepped blocks',line:'continuous line',filled:'filled area'};
+    parts.push(`Render as ${labels[s.style]||s.style} instead of bars`);
+  }
+  if(s.mirror) parts.push('Mirror mode (symmetric above/below center line)');
+  if(s.envelope) parts.push(`Envelope overlay (smoothing=${s.smooth}, color=${s.envColor}, opacity=${s.envOpacity}%)`);
+  if(s.centerLine) parts.push('Show center line');
+  if(s.glow!==d.glow||s.glowInt!==d.glowInt){
+    if(!s.glow) parts.push('Disable glow effect');
+    else if(s.glowInt!==d.glowInt) parts.push(`Glow intensity ${s.glowInt}%`);
+  }
+  if(s.bg!==d.bg) parts.push(`Background color ${s.bg}`);
+  if(s.bassW!==d.bassW||s.midW!==d.midW||s.trebW!==d.trebW){
+    parts.push(`Frequency weights: bass ${s.bassW}%, mids ${s.midW}%, treble ${s.trebW}%`);
+  }
+
+  const out=document.getElementById('promptOutput');
+  if(parts.length===0){
+    out.textContent='Current settings match defaults. Adjust controls or pick a preset to generate a prompt.';
+  } else {
+    out.textContent=`Update the Peak DJ Waveform component to use frequency-colored rendering:\n\n${parts.map((p,i)=>`${i+1}. ${p}`).join('\n')}\n\nThis requires modifying audioAnalysis.ts to output per-bar frequency band data (bass/mid/treble power) alongside the existing 180 peak-amplitude buckets, and updating Waveform.tsx to color each bar based on its dominant frequency content.`;
+  }
+}
+
+function updateAll(){
+  renderWaveform('cvMain',true);
+  renderWaveform('cvStd',false);
+  updateLegend();
+  updateValues();
+  updatePrompt();
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b.textContent===activePreset));
+}
+
+// Copy
+document.getElementById('copyBtn').addEventListener('click',()=>{
+  navigator.clipboard.writeText(document.getElementById('promptOutput').textContent).then(()=>{
+    const b=document.getElementById('copyBtn');b.textContent='Copied!';setTimeout(()=>b.textContent='Copy Prompt',1500);
+  });
+});
+
+// Resize
+window.addEventListener('resize',()=>updateAll());
+
+// Init
+applyPreset('Forest Night');
+</script>
+</body>
+</html>

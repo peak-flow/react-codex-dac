@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analysis Pipeline — Peak DJ Code Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+  --bg: #0b1215;
+  --surface: #111a1f;
+  --surface-elevated: #162027;
+  --surface-recessed: #090f12;
+  --border: rgba(122, 255, 138, 0.08);
+  --border-bright: rgba(122, 255, 138, 0.18);
+  --text: #d8e8dc;
+  --text-dim: #6a8a6e;
+  --accent: #7aff8a;
+  --accent-dim: rgba(122, 255, 138, 0.08);
+  --secondary: #d4e157;
+  --secondary-dim: rgba(212, 225, 87, 0.08);
+  --amber: #e8a84c;
+  --amber-dim: rgba(232, 168, 76, 0.08);
+  --danger: #ff6b6b;
+  --danger-dim: rgba(255, 107, 107, 0.06);
+  --ipc: #5ec4e0;
+  --ipc-dim: rgba(94, 196, 224, 0.08);
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f7f4;
+    --surface: #ffffff;
+    --surface-elevated: #ffffff;
+    --surface-recessed: #eef2ee;
+    --border: rgba(14, 22, 14, 0.08);
+    --border-bright: rgba(14, 22, 14, 0.16);
+    --text: #1a2e1c;
+    --text-dim: #5a7a5e;
+    --accent: #2d8a3a;
+    --accent-dim: rgba(45, 138, 58, 0.06);
+    --secondary: #8a9a10;
+    --secondary-dim: rgba(138, 154, 16, 0.06);
+    --amber: #b07020;
+    --amber-dim: rgba(176, 112, 32, 0.06);
+    --danger: #c43030;
+    --danger-dim: rgba(196, 48, 48, 0.05);
+    --ipc: #0a7a9a;
+    --ipc-dim: rgba(10, 122, 154, 0.06);
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse at 30% 0%, var(--accent-dim) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 100%, var(--secondary-dim) 0%, transparent 40%);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  padding: 0;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeScale { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes drawLine { from { stroke-dashoffset: 200; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+.page { max-width: 1140px; margin: 0 auto; padding: 48px 24px 80px; }
+
+/* ── Hero ── */
+.hero { padding: 56px 0 40px; animation: fadeUp 0.6s ease both; }
+.hero-label {
+  font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 12px;
+}
+.hero h1 { font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 700; line-height: 1.1; margin-bottom: 12px; }
+.hero p { color: var(--text-dim); font-size: 1.05rem; max-width: 680px; }
+
+/* ── KPI row ── */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px; margin: 28px 0 40px;
+  animation: fadeUp 0.6s ease 0.15s both;
+}
+.kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 16px; text-align: center;
+}
+.kpi-value { font-size: 1.8rem; font-weight: 700; color: var(--accent); display: block; }
+.kpi-label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-top: 4px; }
+
+/* ── Section ── */
+.section { margin: 48px 0; animation: fadeUp 0.6s ease both; }
+.section-label {
+  font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-label::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); display: inline-block; flex-shrink: 0;
+}
+.section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 16px; }
+
+/* ── Mermaid container ── */
+.diagram-shell {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  overflow: hidden; animation: fadeScale 0.5s ease 0.2s both;
+}
+.diagram-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.diagram-header span { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); }
+.zoom-controls { display: flex; gap: 4px; }
+.zoom-btn {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--border-bright);
+  background: var(--surface-recessed); color: var(--text); font-size: 1rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s;
+}
+.zoom-btn:hover { border-color: var(--accent); }
+.mermaid-viewport {
+  overflow: auto; padding: 24px; min-height: 300px;
+  display: flex; justify-content: center; align-items: flex-start;
+}
+.mermaid-canvas { transform-origin: top center; transition: transform 0.2s ease; }
+
+/* ── Pipeline cards ── */
+.pipeline { display: flex; flex-direction: column; gap: 0; }
+.step-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 24px; position: relative;
+  animation: fadeUp 0.5s ease both;
+}
+.step-card + .step-connector {
+  display: flex; justify-content: center; padding: 4px 0;
+}
+.step-connector svg { width: 2px; height: 28px; }
+.step-connector line { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 4; }
+.step-num {
+  position: absolute; top: -1px; left: -1px;
+  background: var(--accent); color: var(--bg); font-family: var(--font-mono);
+  font-size: 0.7rem; font-weight: 600; padding: 4px 10px;
+  border-radius: 14px 0 10px 0; letter-spacing: 0.06em;
+}
+.step-card h3 { font-size: 1.1rem; font-weight: 600; margin: 0 0 8px 48px; }
+.step-card .step-file {
+  font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-dim);
+  margin: 0 0 12px 48px;
+}
+.step-card p { color: var(--text-dim); font-size: 0.9rem; }
+.step-card code {
+  font-family: var(--font-mono); font-size: 0.82rem;
+  background: var(--surface-recessed); border: 1px solid var(--border);
+  padding: 2px 6px; border-radius: 4px;
+}
+.step-card pre {
+  font-family: var(--font-mono); font-size: 0.78rem; line-height: 1.55;
+  background: var(--surface-recessed); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; margin-top: 12px;
+  overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;
+  color: var(--text);
+}
+.step-badge {
+  display: inline-block; font-family: var(--font-mono); font-size: 0.65rem;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 6px; margin-left: 48px; margin-bottom: 8px;
+}
+.badge-ipc { background: var(--ipc-dim); color: var(--ipc); border: 1px solid rgba(94,196,224,0.2); }
+.badge-dsp { background: var(--secondary-dim); color: var(--secondary); border: 1px solid rgba(212,225,87,0.2); }
+.badge-state { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(122,255,138,0.2); }
+.badge-async { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(232,168,76,0.2); }
+
+/* ── Data shape cards ── */
+.data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+.data-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px; animation: fadeUp 0.5s ease both;
+}
+.data-card h4 { font-size: 0.85rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.data-card h4::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.data-card.input h4::before { background: var(--ipc); }
+.data-card.output h4::before { background: var(--accent); }
+.data-card pre {
+  font-family: var(--font-mono); font-size: 0.72rem; line-height: 1.5;
+  color: var(--text-dim); white-space: pre-wrap;
+}
+
+/* ── Issues ── */
+.issues { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.issue {
+  background: var(--danger-dim); border: 1px solid rgba(255,107,107,0.12);
+  border-radius: 12px; padding: 16px 18px;
+  animation: fadeUp 0.5s ease both;
+}
+.issue h4 { font-size: 0.9rem; font-weight: 600; color: var(--danger); margin-bottom: 6px; }
+.issue p { font-size: 0.85rem; color: var(--text-dim); }
+.issue code { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text); }
+
+/* ── Merge strategy table ── */
+.merge-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.85rem; }
+.merge-table th {
+  text-align: left; padding: 10px 12px; font-size: 0.68rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-dim);
+  border-bottom: 1px solid var(--border-bright);
+  background: var(--surface-recessed);
+}
+.merge-table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.merge-table tr:hover { background: var(--accent-dim); }
+.merge-table code { font-family: var(--font-mono); font-size: 0.78rem; background: var(--surface-recessed); padding: 1px 5px; border-radius: 3px; }
+
+/* ── Footer ── */
+.footer {
+  margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border);
+  font-size: 0.75rem; color: var(--text-dim); text-align: center;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 720px) {
+  .data-grid { grid-template-columns: 1fr; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .step-card h3 { margin-left: 0; margin-top: 24px; }
+  .step-card .step-file { margin-left: 0; }
+  .step-badge { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ═══ HERO ═══ -->
+<header class="hero">
+  <div class="hero-label">Code Flow Documentation</div>
+  <h1>Analysis Pipeline</h1>
+  <p>How Peak DJ transforms raw audio files into BPM, musical key, energy scores, and waveform data — from button click to React state update.</p>
+</header>
+
+<div class="kpi-row">
+  <div class="kpi"><span class="kpi-value">14</span><span class="kpi-label">Steps Traced</span></div>
+  <div class="kpi"><span class="kpi-value">5</span><span class="kpi-label">Files Crossed</span></div>
+  <div class="kpi"><span class="kpi-value">2</span><span class="kpi-label">Process Boundaries</span></div>
+  <div class="kpi"><span class="kpi-value">18</span><span class="kpi-label">Verified Citations</span></div>
+  <div class="kpi"><span class="kpi-value" style="color:var(--danger)">5</span><span class="kpi-label">Issues Found</span></div>
+</div>
+
+<!-- ═══ OVERVIEW DIAGRAM ═══ -->
+<div class="section" style="animation-delay:0.25s">
+  <div class="section-label">Overview</div>
+  <h2>Pipeline at a Glance</h2>
+  <div class="diagram-shell">
+    <div class="diagram-header">
+      <span>flowchart TD — analysis lifecycle</span>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomDiag(-0.15)" title="Zoom out">−</button>
+        <button class="zoom-btn" onclick="zoomDiag(0.15)" title="Zoom in">+</button>
+        <button class="zoom-btn" onclick="resetZoom()" title="Reset">⟲</button>
+      </div>
+    </div>
+    <div class="mermaid-viewport" id="mermaidViewport">
+      <div class="mermaid-canvas" id="mermaidCanvas">
+        <pre class="mermaid">
+flowchart TD
+    A["🎵 Analyze All<br/><small>App.tsx:462</small>"]:::trigger --> B
+    A2["📂 Folder Scan<br/><small>App.tsx:445</small>"]:::trigger --> B
+    B["needsAnalysis() gate<br/><small>djEngine.ts:191</small>"]:::logic --> C
+    C["queueTracksForAnalysis()<br/><small>dedupe + prioritize</small>"]:::logic --> D
+    D["useEffect queue processor<br/><small>analysisRunningRef guard</small>"]:::effect --> E
+    E["IPC: readAudioFile<br/><small>Electron main → fs.readFile</small>"]:::ipc --> F
+    F["AudioContext.decodeAudioData<br/><small>MP3/FLAC/WAV → PCM</small>"]:::dsp --> G
+    G["mixdown → downsample<br/><small>stereo → mono, 44.1k → 11025 Hz</small>"]:::dsp --> H
+    H["estimateBpm()<br/><small>onset envelope + autocorrelation</small>"]:::dsp --> J
+    I["estimateKey()<br/><small>Goertzel + Krumhansl profiles</small>"]:::dsp --> J
+    G --> I
+    G --> K["estimateEnergy()<br/><small>RMS × 240, clamped 0-100</small>"]:::dsp
+    G --> L["buildWaveform(180)<br/><small>peak amplitude buckets</small>"]:::dsp
+    K --> J
+    L --> J
+    J["setLocalTracks(merge)<br/><small>tag priority for BPM/key</small>"]:::state --> M
+    M["finally: clear mutex<br/><small>remove from queue</small>"]:::effect --> N
+    N{{"More tracks?"}}:::decision -->|Yes| D
+    N -->|No| O["Completion notice<br/><small>Analysis idle</small>"]:::state
+
+    classDef trigger fill:#162027,stroke:#7aff8a,stroke-width:2px,color:#d8e8dc
+    classDef logic fill:#162027,stroke:#d4e157,stroke-width:1.5px,color:#d8e8dc
+    classDef effect fill:#162027,stroke:#e8a84c,stroke-width:1.5px,color:#d8e8dc
+    classDef ipc fill:#162027,stroke:#5ec4e0,stroke-width:2px,color:#d8e8dc
+    classDef dsp fill:#162027,stroke:#7aff8a,stroke-width:1.5px,color:#d8e8dc
+    classDef state fill:#162027,stroke:#7aff8a,stroke-width:2px,color:#d8e8dc
+    classDef decision fill:#162027,stroke:#e8a84c,stroke-width:2px,color:#d8e8dc
+        </pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DETAILED STEPS ═══ -->
+<div class="section" style="animation-delay:0.35s">
+  <div class="section-label">Detailed Trace</div>
+  <h2>Step-by-Step Execution</h2>
+  <div class="pipeline">
+
+    <!-- Step 1-3: Trigger → Queue -->
+    <div class="step-card" style="animation-delay:0.4s">
+      <span class="step-num">01–03</span>
+      <h3>Trigger → Filter → Queue</h3>
+      <div class="step-file">src/App.tsx:462 → src/lib/djEngine.ts:191 → src/App.tsx:280</div>
+      <span class="step-badge badge-state">React State</span>
+      <p>User clicks "Analyze All" or folder scan auto-queues. Tracks pass through <code>needsAnalysis()</code> — any playable track missing <code>energy</code>, <code>waveform</code>, <code>bpm</code>, or <code>camelotKey</code> qualifies. IDs are deduplicated and prepended to the queue.</p>
+      <pre>// needsAnalysis gate
+track.availability === 'playable' &&
+  (track.energy === null || track.waveform.length === 0
+   || track.bpm === null || track.camelotKey === null)
+
+// Queue with deduplication
+const existing = new Set(current);
+const incoming = trackIds.filter(id => !existing.has(id));
+return prioritize ? [...incoming, ...current] : [...current, ...incoming];</pre>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 4-5: Effect guard -->
+    <div class="step-card" style="animation-delay:0.5s">
+      <span class="step-num">04–05</span>
+      <h3>Effect Guard &amp; Mutex</h3>
+      <div class="step-file">src/App.tsx:320–334</div>
+      <span class="step-badge badge-async">useEffect</span>
+      <p>The queue <code>useEffect</code> checks <code>analysisRunningRef</code> — a ref-based mutex that prevents concurrent analyses. This was the fix for a deadlock where <code>analyzingTrackId</code> (state) in the dep array caused the effect to cancel itself on every state update.</p>
+      <pre>// Ref-based guard (NOT state — avoids self-cancellation)
+if (analysisRunningRef.current || analysisQueue.length === 0) return;
+
+// Track lookup via ref (not state — avoids dep array inclusion)
+const track = localTracksRef.current.find(item => item.id === nextTrackId);
+
+analysisRunningRef.current = true; // Lock
+setAnalyzingTrackId(nextTrackId);   // UI indicator</pre>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 6: IPC -->
+    <div class="step-card" style="animation-delay:0.6s">
+      <span class="step-num">06</span>
+      <h3>IPC: Read Audio File</h3>
+      <div class="step-file">src/App.tsx:245 → electron/preload.cjs:6 → electron/main.cjs:558</div>
+      <span class="step-badge badge-ipc">IPC Boundary</span>
+      <p>Reads the entire audio file via Electron IPC. A <code>Map&lt;string, ArrayBuffer&gt;</code> cache prevents re-reads for tracks already loaded on a deck. The main process reads with <code>fs.readFile</code> and returns <code>Uint8Array</code>, which is copied to a fresh <code>ArrayBuffer</code> in the renderer (Electron IPC may return <code>SharedArrayBuffer</code>).</p>
+      <pre>// Renderer → IPC → Main Process
+const bytes = await window.appAPI.readAudioFile(track.filePath);
+const arrayBuffer = bytesToArrayBuffer(bytes); // copy to own ArrayBuffer
+bufferCacheRef.current.set(track.filePath, arrayBuffer);
+
+// Main process handler
+ipcMain.handle('library:read-audio-file', async (_event, filePath) => {
+  const file = await fs.readFile(filePath);
+  return new Uint8Array(file);
+});</pre>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 7-8: Decode & Prepare -->
+    <div class="step-card" style="animation-delay:0.7s">
+      <span class="step-num">07–08</span>
+      <h3>Decode → Mixdown → Downsample</h3>
+      <div class="step-file">src/lib/audioAnalysis.ts:292–298</div>
+      <span class="step-badge badge-dsp">DSP</span>
+      <p>Web Audio API decodes the compressed audio (MP3/FLAC/WAV/etc.) into raw PCM. Then: stereo channels are averaged into mono, and 44.1 kHz samples are downsampled to <strong>11,025 Hz</strong> (4× reduction) for faster analysis.</p>
+      <pre>const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+const mono = mixdown(decoded);         // stereo → mono (average channels)
+const resampled = downsample(mono, decoded.sampleRate, 11025);</pre>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 9: BPM -->
+    <div class="step-card" style="animation-delay:0.8s">
+      <span class="step-num">09</span>
+      <h3>BPM Estimation</h3>
+      <div class="step-file">src/lib/audioAnalysis.ts:117–172</div>
+      <span class="step-badge badge-dsp">DSP — Onset Autocorrelation</span>
+      <p>Selects a <strong>90-second window</strong> anchored at 18% of the track (skipping intros). Computes an onset envelope from RMS energy increases (frame=1024, hop=256). Autocorrelates across lags corresponding to <strong>70–180 BPM</strong>. Applies octave correction: doubles sub-84 BPM, halves super-170 BPM.</p>
+      <pre>// Onset detection: positive RMS derivative
+onsetEnvelope.push(Math.max(0, rms - previousRms));
+
+// Autocorrelation: find dominant periodicity
+for (let lag = minLag; lag <= maxLag; lag++) {
+  score += smoothed[i] * smoothed[i - lag];  // dot product at lag
+}
+
+// Octave correction
+if (bpm < 84) bpm *= 2;   // half-time → double
+if (bpm > 170) bpm /= 2;  // double-time → halve</pre>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 10: Key -->
+    <div class="step-card" style="animation-delay:0.9s">
+      <span class="step-num">10</span>
+      <h3>Key Estimation</h3>
+      <div class="step-file">src/lib/audioAnalysis.ts:220–290</div>
+      <span class="step-badge badge-dsp">DSP — Goertzel + Krumhansl-Schmuckler</span>
+      <p>Selects a <strong>72-second window</strong> at 24%. Uses the <strong>Goertzel algorithm</strong> (single-frequency DFT) to measure power at each of 12 pitch classes across 3 octaves (MIDI 48, 60, 72). Accumulates a chroma vector. Correlates against <strong>Krumhansl-Kessler</strong> major and minor key profiles for all 12 roots (<strong>24 comparisons</strong>). Best match → key + Camelot code.</p>
+      <pre>// Goertzel power at each pitch class × 3 octaves
+for (let pitchClass = 0; pitchClass < 12; pitchClass++) {
+  for (const octave of [48, 60, 72]) {
+    chroma[pitchClass] += goertzelPower(..., midiToFrequency(octave + pitchClass));
+  }
+}
+
+// Krumhansl-Schmuckler: correlate chroma with key profiles
+majorScore = correlation(chroma, rotateProfile(MAJOR_PROFILE, root));
+minorScore = correlation(chroma, rotateProfile(MINOR_PROFILE, root));
+
+// Output: "Cm" → Camelot "5A"
+const key = normalizeMusicalKey(`${NOTE_NAMES[bestRoot]}${bestMode === 'minor' ? 'm' : ''}`);
+return { key, camelot: camelotFromKey(key), confidence };</pre>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 11: Energy + Waveform -->
+    <div class="step-card" style="animation-delay:1.0s">
+      <span class="step-num">11</span>
+      <h3>Energy &amp; Waveform</h3>
+      <div class="step-file">src/lib/audioAnalysis.ts:89–98, 70–87</div>
+      <span class="step-badge badge-dsp">DSP</span>
+      <p><strong>Energy</strong>: Global RMS of all samples, scaled by 240 and clamped to 0–100. Quiet ambient ≈ 15, loud EDM ≈ 80+.<br>
+      <strong>Waveform</strong>: Divides the track into 180 equal segments, records the peak amplitude in each. These 180 values drive the scrollable SVG waveform visualization.</p>
+      <pre>// Energy: RMS → 0-100 scale
+const rms = Math.sqrt(sum / samples.length);
+return Math.round(clamp(rms * 240, 0, 100));
+
+// Waveform: 180 peak buckets
+for (let i = 0; i < 180; i++) {
+  buckets[i] = peakAmplitudeInSegment(i); // 0-1
+}</pre>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 12: State merge -->
+    <div class="step-card" style="animation-delay:1.1s">
+      <span class="step-num">12</span>
+      <h3>State Merge</h3>
+      <div class="step-file">src/App.tsx:342–362</div>
+      <span class="step-badge badge-state">React State</span>
+      <p>Analysis results are merged into the existing track, respecting tag priority — embedded metadata takes precedence for BPM and key, while energy and waveform always come from analysis.</p>
+      <table class="merge-table">
+        <thead><tr><th>Field</th><th>Strategy</th><th>Operator</th></tr></thead>
+        <tbody>
+          <tr><td><code>bpm</code></td><td>Tag BPM wins if present</td><td><code>item.bpm ?? analysis.bpm</code></td></tr>
+          <tr><td><code>key</code></td><td>Tag key wins if present</td><td><code>item.key || analysis.key</code></td></tr>
+          <tr><td><code>camelotKey</code></td><td>Existing → analysis → derived</td><td>Triple fallback chain</td></tr>
+          <tr><td><code>confidence</code></td><td>Take higher of tag vs analysis</td><td><code>Math.max(...)</code></td></tr>
+          <tr><td><code>energy</code></td><td>Always from analysis</td><td>Overwrite</td></tr>
+          <tr><td><code>waveform</code></td><td>Always from analysis</td><td>Overwrite (180 peaks)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="step-connector"><svg><line x1="1" y1="0" x2="1" y2="28"/></svg></div>
+
+    <!-- Step 13-14: Queue advance + completion -->
+    <div class="step-card" style="animation-delay:1.2s">
+      <span class="step-num">13–14</span>
+      <h3>Queue Advance &amp; Completion</h3>
+      <div class="step-file">src/App.tsx:366–372, 218–234</div>
+      <span class="step-badge badge-async">Effect Loop</span>
+      <p>The <code>finally</code> block <strong>always runs</strong> (no cancelled check — that was the original deadlock). It clears the mutex, removes the track from the queue, which triggers a re-render → the effect fires again for the next track. A separate effect watches for the active→idle transition and fires a completion notice.</p>
+      <pre>finally {
+  analysisRunningRef.current = false;  // Unlock mutex
+  setAnalyzingTrackId(null);           // Clear UI indicator
+  setAnalysisQueue(q => q.filter(id => id !== nextTrackId)); // → re-triggers effect
+}</pre>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ DATA SHAPES ═══ -->
+<div class="section" style="animation-delay:0.45s">
+  <div class="section-label">Data Boundaries</div>
+  <h2>Data Shape at Key Transitions</h2>
+  <div class="data-grid">
+    <div class="data-card input">
+      <h4>IPC Request</h4>
+      <pre>filePath: string
+// e.g. "/Volumes/T9/.../song.mp3"</pre>
+    </div>
+    <div class="data-card output">
+      <h4>IPC Response</h4>
+      <pre>Uint8Array
+// raw file bytes, entire file in memory
+// copied to ArrayBuffer in renderer</pre>
+    </div>
+    <div class="data-card input">
+      <h4>Analysis Input</h4>
+      <pre>ArrayBuffer (encoded audio)
+// MP3, FLAC, WAV, M4A, OGG, etc.</pre>
+    </div>
+    <div class="data-card output">
+      <h4>Analysis Output</h4>
+      <pre>TrackAnalysis {
+  bpm: 126.3,
+  bpmConfidence: 0.82,
+  key: "Cm",
+  camelotKey: "5A",
+  keyConfidence: 0.71,
+  energy: 72,
+  waveform: [0.12, 0.34, ...×180],
+  analysisSource: 'local-analysis'
+}</pre>
+    </div>
+    <div class="data-card input">
+      <h4>Track Before</h4>
+      <pre>{
+  bpm: null,
+  key: "Am",          // from tags
+  camelotKey: null,
+  energy: null,
+  waveform: [],
+  analysisSource: 'tags'
+}</pre>
+    </div>
+    <div class="data-card output">
+      <h4>Track After</h4>
+      <pre>{
+  bpm: 126.3,         // from analysis
+  key: "Am",          // kept from tags
+  camelotKey: "8A",   // derived
+  energy: 72,
+  waveform: [0.12, ...×180],
+  analysisSource: 'local-analysis'
+}</pre>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ KNOWN ISSUES ═══ -->
+<div class="section" style="animation-delay:0.55s">
+  <div class="section-label" style="--dot-color:var(--danger)">Known Issues</div>
+  <h2>Issues Discovered While Tracing</h2>
+  <div class="issues">
+    <div class="issue" style="animation-delay:0.6s">
+      <h4>1. Entire File Read Into Memory</h4>
+      <p><code>fs.readFile(filePath)</code> reads the complete audio file. A 50 MB FLAC creates ~150 MB transient pressure (Buffer + Uint8Array + ArrayBuffer copies across IPC).</p>
+    </div>
+    <div class="issue" style="animation-delay:0.65s">
+      <h4>2. No Analysis Cancellation</h4>
+      <p>No way to abort an in-flight analysis (e.g., when scanning a new folder). The old <code>cancelled</code> flag was removed because it caused the deadlock. An <code>AbortController</code> mechanism could be added.</p>
+    </div>
+    <div class="issue" style="animation-delay:0.7s">
+      <h4>3. Sequential Processing</h4>
+      <p>Tracks are analyzed one at a time. For 100+ tracks, parallel analysis (2–3 concurrent) would improve throughput.</p>
+    </div>
+    <div class="issue" style="animation-delay:0.75s">
+      <h4>4. Analysis Results Not Persisted</h4>
+      <p>All data lives in React state. Closing the app loses all BPM, key, energy, and waveform data. Re-scanning requires full re-analysis.</p>
+    </div>
+    <div class="issue" style="animation-delay:0.8s">
+      <h4>5. Confidence Bias Constants</h4>
+      <p>BPM confidence adds +0.35, key adds +0.32. These hand-tuned biases inflate scores — ambiguous tempo may report 0.6 confidence when actual certainty is low.</p>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  peak-codex-dac · commit a2a55a2 · documented 2026-03-18 · 18 verified citations
+</footer>
+
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    look: 'classic',
+    themeVariables: {
+      primaryColor: isDark ? '#162027' : '#eef5ee',
+      primaryBorderColor: isDark ? '#7aff8a' : '#2d8a3a',
+      primaryTextColor: isDark ? '#d8e8dc' : '#1a2e1c',
+      secondaryColor: isDark ? '#1a2520' : '#f4faf4',
+      secondaryBorderColor: isDark ? '#d4e157' : '#8a9a10',
+      secondaryTextColor: isDark ? '#d8e8dc' : '#1a2e1c',
+      tertiaryColor: isDark ? '#201a12' : '#fef8ee',
+      tertiaryBorderColor: isDark ? '#e8a84c' : '#b07020',
+      tertiaryTextColor: isDark ? '#d8e8dc' : '#1a2e1c',
+      lineColor: isDark ? '#4a6a4e' : '#8aaa8e',
+      fontSize: '14px',
+      fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+    }
+  });
+
+  // Zoom controls
+  let currentZoom = 1;
+  const canvas = document.getElementById('mermaidCanvas');
+  window.zoomDiag = function(delta) {
+    currentZoom = Math.max(0.4, Math.min(2.5, currentZoom + delta));
+    canvas.style.transform = `scale(${currentZoom})`;
+  };
+  window.resetZoom = function() {
+    currentZoom = 1;
+    canvas.style.transform = 'scale(1)';
+  };
+
+  // Scroll to zoom
+  document.getElementById('mermaidViewport').addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      zoomDiag(e.deltaY > 0 ? -0.1 : 0.1);
+    }
+  }, { passive: false });
+</script>
+</body>
+</html>
