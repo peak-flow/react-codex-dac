@@ -1,0 +1,236 @@
+{
+  "version": 2,
+  "project": "peak-codex-dac",
+  "scannedAt": "2026-03-18T22:50:00Z",
+  "depth": "full",
+  "theme": "Forest Night",
+  "totalLines": 4163,
+  "totalSourceFiles": 14,
+  "techStack": {
+    "languages": ["TypeScript", "JavaScript (CJS)"],
+    "frameworks": ["Electron 38", "React 19", "Vite 7"],
+    "tools": ["SWC (via @vitejs/plugin-react-swc)", "music-metadata", "concurrently", "wait-on"],
+    "databases": [],
+    "packageManager": "npm"
+  },
+  "structure": {
+    "entryPoints": [
+      "electron/main.cjs",
+      "electron/preload.cjs",
+      "src/main.tsx",
+      "src/App.tsx",
+      "index.html"
+    ],
+    "directories": {
+      "electron/": "Desktop shell — Electron main process, IPC handlers, Spotify PKCE auth, local file scanning",
+      "src/": "React renderer — app state, components, styles, types",
+      "src/lib/": "Core logic — audio analysis (BPM/key/energy/waveform), DJ intelligence (transitions, crates, Camelot)",
+      "src/components/": "UI components — dual decks, scrollable waveform, library table, sidebar, insight panel",
+      "dist/": "Production build output (Vite, gitignored)",
+      "pf-docs/": "Project documentation and codemap cache"
+    }
+  },
+  "files": {
+    "electron/main.cjs": {
+      "lines": 578,
+      "imports": ["electron", "node:path", "node:fs/promises", "node:crypto", "node:http", "music-metadata (dynamic)"],
+      "constants": [
+        { "name": "DEV_SERVER_URL", "line": 7, "value": "http://127.0.0.1:5173" },
+        { "name": "SPOTIFY_REDIRECT_URI", "line": 8, "value": "http://127.0.0.1:47832/spotify/callback" },
+        { "name": "SPOTIFY_API_BASE", "line": 9, "value": "https://api.spotify.com/v1" },
+        { "name": "AUDIO_EXTENSIONS", "line": 10, "value": "Set(.mp3,.m4a,.aac,.wav,.aiff,.aif,.flac,.ogg,.opus)" }
+      ],
+      "functions": [
+        { "name": "createWindow", "line": 25, "params": "()", "returns": "void" },
+        { "name": "wait", "line": 54, "params": "(ms)", "returns": "Promise<void>" },
+        { "name": "buildTrackId", "line": 60, "params": "(prefix, value)", "returns": "string" },
+        { "name": "guessMimeType", "line": 64, "params": "(filePath)", "returns": "string" },
+        { "name": "fallbackTitleFromFile", "line": 88, "params": "(filePath)", "returns": "string" },
+        { "name": "walkMusicFiles", "line": 95, "params": "(rootPath)", "returns": "Promise<string[]>" },
+        { "name": "parseLocalTrack", "line": 124, "params": "(filePath)", "returns": "Promise<Track>" },
+        { "name": "createCodeVerifier", "line": 201, "params": "()", "returns": "string" },
+        { "name": "createCodeChallenge", "line": 205, "params": "(codeVerifier)", "returns": "string" },
+        { "name": "spotifyFetch", "line": 209, "params": "(url, options?, allowRetry?)", "returns": "Promise<Response>" },
+        { "name": "spotifyPaginated", "line": 247, "params": "(pathOrUrl)", "returns": "Promise<any[]>" },
+        { "name": "refreshSpotifyAccessToken", "line": 260, "params": "()", "returns": "Promise<void>" },
+        { "name": "ensureSpotifyAccessToken", "line": 294, "params": "()", "returns": "Promise<void>" },
+        { "name": "startSpotifyAuth", "line": 306, "params": "(clientId)", "returns": "Promise<{profile}>" },
+        { "name": "mapSpotifyTrack", "line": 427, "params": "(rawTrack, overrides?)", "returns": "Track" },
+        { "name": "importSpotifyLibrary", "line": 466, "params": "()", "returns": "Promise<SpotifyImport>" }
+      ],
+      "ipcHandlers": [
+        { "channel": "library:select-folder", "line": 530 },
+        { "channel": "library:scan-folder", "line": 543 },
+        { "channel": "library:read-audio-file", "line": 558 },
+        { "channel": "shell:open-external", "line": 563 },
+        { "channel": "spotify:login", "line": 569 },
+        { "channel": "spotify:sync", "line": 571 },
+        { "channel": "spotify:logout", "line": 573 },
+        { "channel": "spotify:redirect-uri", "line": 578 }
+      ]
+    },
+    "electron/preload.cjs": {
+      "lines": 12,
+      "imports": ["electron"],
+      "bridgedMethods": [
+        "selectMusicFolder → library:select-folder",
+        "scanMusicFolder → library:scan-folder",
+        "readAudioFile → library:read-audio-file",
+        "openExternal → shell:open-external",
+        "spotifyLogin → spotify:login",
+        "spotifySync → spotify:sync",
+        "spotifyLogout → spotify:logout",
+        "getSpotifyRedirectUri → spotify:redirect-uri"
+      ]
+    },
+    "src/types.ts": {
+      "lines": 119,
+      "types": ["DeckId", "TrackSource", "TrackAvailability", "CrateKind", "CrateSource", "SortKey", "SourceFilter"],
+      "interfaces": [
+        { "name": "Track", "line": 15, "fields": 30 },
+        { "name": "TrackAnalysis", "line": 47, "fields": 8 },
+        { "name": "SpotifyProfile", "line": 58, "fields": 4 },
+        { "name": "SpotifyPlaylist", "line": 65, "fields": 7 },
+        { "name": "SpotifyImport", "line": 75, "fields": 3 },
+        { "name": "Crate", "line": 81, "fields": 7 },
+        { "name": "DeckState", "line": 91, "fields": 8 },
+        { "name": "TransitionSuggestion", "line": 102, "fields": 5 },
+        { "name": "SetArcSummary", "line": 115, "fields": 3 }
+      ]
+    },
+    "src/vite-env.d.ts": {
+      "lines": 24,
+      "description": "Global Window.appAPI type declaration (8 bridged IPC methods)"
+    },
+    "src/main.tsx": {
+      "lines": 4,
+      "description": "React mount point — createRoot on #root, renders <App />"
+    },
+    "src/App.tsx": {
+      "lines": 707,
+      "imports": ["react", "./lib/audioAnalysis", "./lib/djEngine", "./components/*", "./types", "./styles.css"],
+      "exports": ["App (default)"],
+      "stateCount": 20,
+      "refCount": 6,
+      "memoCount": 7,
+      "callbackCount": 9,
+      "effectCount": 6,
+      "handlers": [
+        "handleOpenExternal", "handleLoadTrack", "handleSyncDeck",
+        "handleScanFolder", "handleAnalyzeAll", "handleSpotifyConnect",
+        "handleSpotifySync", "handleSpotifyLogout"
+      ],
+      "keyFix": "Analysis queue uses analysisRunningRef (not state) to avoid effect self-cancellation deadlock"
+    },
+    "src/lib/djEngine.ts": {
+      "lines": 678,
+      "imports": ["../types"],
+      "constants": ["CAMELOT_BY_KEY (24 mappings)", "KEY_BY_CAMELOT", "SOURCE_SORT_ORDER", "ENHARMONIC_MAP"],
+      "internalFunctions": [
+        { "name": "normalizeText", "line": 65 },
+        { "name": "makeFingerprint", "line": 75 },
+        { "name": "unique", "line": 79 },
+        { "name": "isAdjacentCamelot", "line": 83 },
+        { "name": "isRelativeCamelot", "line": 102 },
+        { "name": "safeNumber", "line": 113 }
+      ],
+      "exports": [
+        { "name": "normalizeMusicalKey", "line": 117, "params": "(input)", "returns": "string | null" },
+        { "name": "camelotFromKey", "line": 152, "params": "(input)", "returns": "string | null" },
+        { "name": "formatDuration", "line": 161, "params": "(totalSeconds)", "returns": "string" },
+        { "name": "formatBpm", "line": 171, "params": "(bpm)", "returns": "string" },
+        { "name": "formatKeyLabel", "line": 179, "params": "(track)", "returns": "string" },
+        { "name": "needsAnalysis", "line": 191, "params": "(track)", "returns": "boolean" },
+        { "name": "mergeTrackLibraries", "line": 198, "params": "(local, spotify, playlists, folderPath)", "returns": "{tracks, crates}" },
+        { "name": "getVisibleTracks", "line": 405, "params": "(tracks, crates, crateId, search, sort, dir, filter)", "returns": "Track[]" },
+        { "name": "scoreTransition", "line": 491, "params": "(current, candidate)", "returns": "TransitionSuggestion" },
+        { "name": "getTransitionSuggestions", "line": 583, "params": "(ref, tracks, excludeIds)", "returns": "TransitionSuggestion[]" },
+        { "name": "buildMixNarrative", "line": 597, "params": "(deckA, deckB)", "returns": "string | null" },
+        { "name": "buildSetArcSummary", "line": 642, "params": "(tracks)", "returns": "SetArcSummary" }
+      ]
+    },
+    "src/lib/audioAnalysis.ts": {
+      "lines": 313,
+      "imports": ["./djEngine", "../types"],
+      "constants": ["TARGET_SAMPLE_RATE=11025", "BPM_WINDOW_SECONDS=90", "KEY_WINDOW_SECONDS=72", "MAJOR_PROFILE", "MINOR_PROFILE", "NOTE_NAMES"],
+      "internalFunctions": [
+        { "name": "clamp", "line": 11 },
+        { "name": "mixdown", "line": 15 },
+        { "name": "downsample", "line": 29 },
+        { "name": "selectWindow", "line": 58 },
+        { "name": "buildWaveform", "line": 70 },
+        { "name": "estimateEnergy", "line": 89 },
+        { "name": "smooth", "line": 100 },
+        { "name": "estimateBpm", "line": 117 },
+        { "name": "midiToFrequency", "line": 174 },
+        { "name": "goertzelPower", "line": 178 },
+        { "name": "normalizeVector", "line": 202 },
+        { "name": "correlation", "line": 211 },
+        { "name": "rotateProfile", "line": 216 },
+        { "name": "estimateKey", "line": 220 }
+      ],
+      "exports": [
+        { "name": "analyzeAudioFile", "line": 292, "params": "(arrayBuffer, audioContext)", "returns": "Promise<TrackAnalysis>" }
+      ]
+    },
+    "src/components/Waveform.tsx": {
+      "lines": 167,
+      "imports": ["react"],
+      "exports": ["Waveform"],
+      "features": [
+        "6 zoom levels: Full, 1/2, 1/4, 8 bars, 4 bars, 2 bars",
+        "Default: 8-bar zoom (computed from BPM + duration)",
+        "Horizontal scroll with auto-follow playhead",
+        "User scroll pauses auto-follow for 3s",
+        "Bar-level grid lines at zoom >= 4x",
+        "8-bar phrase markers",
+        "Zoom controls (+/−) overlaid top-right"
+      ],
+      "functions": [
+        { "name": "computeEightBarZoom", "line": 18, "params": "(bpm, duration)", "returns": "number" },
+        { "name": "Waveform", "line": 22, "params": "(WaveformProps)", "returns": "JSX.Element" }
+      ]
+    },
+    "src/components/DeckPanel.tsx": {
+      "lines": 333,
+      "imports": ["react", "../lib/djEngine", "./Waveform", "../types"],
+      "exports": ["DeckPanel"],
+      "handlers": ["handleTogglePlayback", "handleScrub", "handlePitchChange", "handleAddCuePoint", "jumpToCue", "jumpToStart"]
+    },
+    "src/components/Sidebar.tsx": {
+      "lines": 160,
+      "imports": ["../types"],
+      "exports": ["Sidebar"],
+      "sections": ["Stats grid", "Scan + Analyze All", "Analysis meter", "Spotify Bridge", "Crates list"]
+    },
+    "src/components/InsightPanel.tsx": {
+      "lines": 81,
+      "imports": ["../lib/djEngine", "../types"],
+      "exports": ["InsightPanel"],
+      "sections": ["Transition Coach", "Mix Narrative", "Set Arc"]
+    },
+    "src/components/LibraryTable.tsx": {
+      "lines": 89,
+      "imports": ["../lib/djEngine", "../types"],
+      "exports": ["LibraryTable"]
+    },
+    "src/styles.css": {
+      "lines": 898,
+      "theme": "Forest Night",
+      "palette": {
+        "bg": "#080e08",
+        "panel": "rgba(14,22,14,0.86)",
+        "accent1": "#7aff8a",
+        "accent2": "#d4e157",
+        "text": "#e0f0e4",
+        "muted": "#6a8a6e"
+      },
+      "design": {
+        "radius": "20px",
+        "blur": "16px",
+        "headingFont": "Inter",
+        "glow": "subtle (35%)"
+      }
+    }
+  }
+}
