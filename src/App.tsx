@@ -23,14 +23,17 @@ import { InsightPanel } from './components/InsightPanel';
 import { LibraryTable } from './components/LibraryTable';
 import { Sidebar } from './components/Sidebar';
 import type {
+  Crate,
   DeckId,
   DeckState,
+  PlayHistoryEntry,
   SortKey,
   SourceFilter,
   SpotifyImport,
   SpotifyProfile,
   SpotifyPlaylist,
-  Track
+  Track,
+  UserTrackMeta
 } from './types';
 import './styles.css';
 
@@ -109,6 +112,21 @@ export default function App() {
     }
   ]);
 
+  const [userTrackMeta, setUserTrackMeta] = useState<Map<string, UserTrackMeta>>(() => {
+    try {
+      const raw = localStorage.getItem('peak.userTrackMeta');
+      if (raw) return new Map(JSON.parse(raw));
+    } catch { /* ignore */ }
+    return new Map();
+  });
+  const [playHistory, setPlayHistory] = useState<PlayHistoryEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem('peak.playHistory');
+      if (raw) return JSON.parse(raw);
+    } catch { /* ignore */ }
+    return [];
+  });
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const bufferCacheRef = useRef(new Map<string, ArrayBuffer>());
   const playbackUrlCacheRef = useRef(new Map<string, string>());
@@ -118,14 +136,44 @@ export default function App() {
   const analysisRunningRef = useRef(false);
   const deferredSearch = useDeferredValue(searchText);
 
-  const { tracks, crates } = useMemo(
+  const { tracks, crates: baseCrates } = useMemo(
     () => mergeTrackLibraries(localTracks, spotifyTracks, spotifyPlaylists, localFolderPath),
     [localTracks, spotifyTracks, spotifyPlaylists, localFolderPath]
   );
 
+  const userCrates = useMemo<Crate[]>(() => {
+    const result: Crate[] = [];
+    const favIds = tracks.filter((t) => userTrackMeta.get(t.id)?.favorite).map((t) => t.id);
+    const removedIds = tracks.filter((t) => userTrackMeta.get(t.id)?.removed).map((t) => t.id);
+
+    const seen = new Set<string>();
+    const historyIds: string[] = [];
+    for (const entry of playHistory) {
+      if (!seen.has(entry.trackId) && tracks.some((t) => t.id === entry.trackId)) {
+        seen.add(entry.trackId);
+        historyIds.push(entry.trackId);
+        if (historyIds.length >= 50) break;
+      }
+    }
+
+    if (favIds.length > 0) {
+      result.push({ id: 'smart:favorites', name: 'Favorites', description: 'Starred tracks', kind: 'smart', source: 'ai', accent: 'amber', trackIds: favIds });
+    }
+    if (historyIds.length > 0) {
+      result.push({ id: 'smart:history', name: 'History', description: 'Recently loaded tracks', kind: 'smart', source: 'ai', accent: 'cyan', trackIds: historyIds });
+    }
+    if (removedIds.length > 0) {
+      result.push({ id: 'smart:removed', name: 'Removed', description: 'Hidden tracks', kind: 'smart', source: 'ai', accent: 'magenta', trackIds: removedIds });
+    }
+
+    return result;
+  }, [tracks, userTrackMeta, playHistory]);
+
+  const crates = useMemo(() => [...baseCrates, ...userCrates], [baseCrates, userCrates]);
+
   const visibleTracks = useMemo(
-    () => getVisibleTracks(tracks, crates, selectedCrateId, deferredSearch, sortKey, sortDirection, sourceFilter),
-    [tracks, crates, selectedCrateId, deferredSearch, sortKey, sortDirection, sourceFilter]
+    () => getVisibleTracks(tracks, crates, selectedCrateId, deferredSearch, sortKey, sortDirection, sourceFilter, userTrackMeta),
+    [tracks, crates, selectedCrateId, deferredSearch, sortKey, sortDirection, sourceFilter, userTrackMeta]
   );
 
   const trackMap = useMemo(() => new Map(tracks.map((track) => [track.id, track])), [tracks]);
@@ -197,6 +245,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('peak.spotifyClientId', spotifyClientId);
   }, [spotifyClientId]);
+
+  useEffect(() => {
+    localStorage.setItem('peak.userTrackMeta', JSON.stringify([...userTrackMeta]));
+  }, [userTrackMeta]);
+
+  useEffect(() => {
+    localStorage.setItem('peak.playHistory', JSON.stringify(playHistory));
+  }, [playHistory]);
 
   useEffect(() => {
     void window.appAPI.getSpotifyRedirectUri().then(setSpotifyRedirectUri).catch(() => undefined);
@@ -317,6 +373,33 @@ export default function App() {
     });
   }, []);
 
+  const handleToggleFavorite = useCallback((trackId: string) => {
+    setUserTrackMeta((current) => {
+      const next = new Map(current);
+      const meta = next.get(trackId) || {};
+      next.set(trackId, { ...meta, favorite: !meta.favorite });
+      return next;
+    });
+  }, []);
+
+  const handleTogglePin = useCallback((trackId: string) => {
+    setUserTrackMeta((current) => {
+      const next = new Map(current);
+      const meta = next.get(trackId) || {};
+      next.set(trackId, { ...meta, pinned: !meta.pinned });
+      return next;
+    });
+  }, []);
+
+  const handleRemoveTrack = useCallback((trackId: string) => {
+    setUserTrackMeta((current) => {
+      const next = new Map(current);
+      const meta = next.get(trackId) || {};
+      next.set(trackId, { ...meta, removed: !meta.removed });
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (analysisRunningRef.current || analysisQueue.length === 0) {
       return;
@@ -356,6 +439,7 @@ export default function App() {
               keyConfidence: Math.max(item.keyConfidence, analysis.keyConfidence),
               energy: analysis.energy,
               waveform: analysis.waveform,
+              waveformBands: analysis.waveformBands,
               analysisSource: 'local-analysis'
             };
           })
@@ -389,6 +473,10 @@ export default function App() {
     }
 
     queueTracksForAnalysis(needsAnalysis(track) ? [track.id] : [], true);
+    setPlayHistory((current) => [
+      { trackId, deckId, loadedAt: new Date().toISOString() },
+      ...current
+    ].slice(0, 200));
     setDecks((current) => ({
       ...current,
       [deckId]: {
@@ -664,8 +752,12 @@ export default function App() {
           <LibraryTable
             tracks={visibleTracks}
             analyzingTrackId={analyzingTrackId}
+            userTrackMeta={userTrackMeta}
             onLoadTrack={handleLoadTrack}
             onOpenExternal={(url) => void handleOpenExternal(url)}
+            onToggleFavorite={handleToggleFavorite}
+            onTogglePin={handleTogglePin}
+            onRemoveTrack={handleRemoveTrack}
           />
         </section>
 

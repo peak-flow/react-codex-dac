@@ -1,22 +1,35 @@
 import { formatBpm, formatDuration, formatKeyLabel } from '../lib/djEngine';
-import type { DeckId, Track } from '../types';
+import type { DeckId, Track, UserTrackMeta } from '../types';
 
 interface LibraryTableProps {
   tracks: Track[];
   analyzingTrackId: string | null;
+  userTrackMeta: Map<string, UserTrackMeta>;
   onLoadTrack: (deckId: DeckId, trackId: string) => void;
   onOpenExternal: (url: string) => void;
+  onToggleFavorite: (trackId: string) => void;
+  onTogglePin: (trackId: string) => void;
+  onRemoveTrack: (trackId: string) => void;
 }
 
-export function LibraryTable({ tracks, analyzingTrackId, onLoadTrack, onOpenExternal }: LibraryTableProps) {
+export function LibraryTable({
+  tracks,
+  analyzingTrackId,
+  userTrackMeta,
+  onLoadTrack,
+  onOpenExternal,
+  onToggleFavorite,
+  onTogglePin,
+  onRemoveTrack
+}: LibraryTableProps) {
   return (
     <div className="library-table-wrap">
       <table className="library-table">
         <thead>
           <tr>
+            <th style={{ width: '40px' }}></th>
             <th>Track</th>
             <th>Artist</th>
-            <th>Album</th>
             <th>BPM</th>
             <th>Key</th>
             <th>Energy</th>
@@ -29,16 +42,28 @@ export function LibraryTable({ tracks, analyzingTrackId, onLoadTrack, onOpenExte
           {tracks.length > 0 ? (
             tracks.map((track) => {
               const isAnalyzing = analyzingTrackId === track.id;
+              const meta = userTrackMeta.get(track.id);
               return (
-                <tr key={track.id} className={`track-row ${track.availability === 'playable' ? 'playable' : 'metadata-only'}`}>
+                <tr key={track.id} className={`track-row ${track.availability === 'playable' ? 'playable' : 'metadata-only'}${meta?.pinned ? ' pinned-row' : ''}`}>
+                  <td style={{ textAlign: 'center' }}>
+                    <button
+                      className={`icon-btn${meta?.favorite ? ' active-fav' : ''}`}
+                      onClick={() => onToggleFavorite(track.id)}
+                      title={meta?.favorite ? 'Unfavorite' : 'Favorite'}
+                    >
+                      {meta?.favorite ? '\u2605' : '\u2606'}
+                    </button>
+                  </td>
                   <td>
                     <div className="track-cell">
-                      <strong>{track.title}</strong>
+                      <strong>
+                        {meta?.pinned ? <span className="pin-indicator" title="Pinned">{'\u{1F4CC}'} </span> : null}
+                        {track.title}
+                      </strong>
                       <span>{track.genre || 'No genre tag'}</span>
                     </div>
                   </td>
                   <td>{track.artist}</td>
-                  <td>{track.album}</td>
                   <td>{isAnalyzing ? 'ANL' : formatBpm(track.bpm)}</td>
                   <td>{formatKeyLabel(track)}</td>
                   <td>
@@ -52,22 +77,32 @@ export function LibraryTable({ tracks, analyzingTrackId, onLoadTrack, onOpenExte
                     <span className={`source-pill source-${track.source}`}>{track.source}</span>
                   </td>
                   <td className="actions">
-                    {track.availability === 'playable' ? (
-                      <div className="action-row">
-                        <button className="table-button" onClick={() => onLoadTrack('A', track.id)}>
-                          Load A
-                        </button>
-                        <button className="table-button alt" onClick={() => onLoadTrack('B', track.id)}>
-                          Load B
-                        </button>
-                      </div>
-                    ) : track.spotifyUrl ? (
-                      <button className="table-button alt" onClick={() => onOpenExternal(track.spotifyUrl!)}>
-                        Open
+                    <div className="action-row">
+                      <button
+                        className={`icon-btn${meta?.pinned ? ' active-pin' : ''}`}
+                        onClick={() => onTogglePin(track.id)}
+                        title={meta?.pinned ? 'Unpin' : 'Pin to top'}
+                      >
+                        {meta?.pinned ? '\u2002\u25C9' : '\u2002\u25CB'}
                       </button>
-                    ) : (
-                      <span className="muted">Need local match</span>
-                    )}
+                      <button
+                        className="icon-btn"
+                        onClick={() => onRemoveTrack(track.id)}
+                        title={meta?.removed ? 'Restore' : 'Remove'}
+                      >
+                        {meta?.removed ? '\u21A9' : '\u2715'}
+                      </button>
+                      {track.availability === 'playable' ? (
+                        <>
+                          <button className="table-button" onClick={() => onLoadTrack('A', track.id)}>A</button>
+                          <button className="table-button alt" onClick={() => onLoadTrack('B', track.id)}>B</button>
+                        </>
+                      ) : track.spotifyUrl ? (
+                        <button className="table-button alt" onClick={() => onOpenExternal(track.spotifyUrl!)}>Open</button>
+                      ) : (
+                        <span className="muted">No file</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

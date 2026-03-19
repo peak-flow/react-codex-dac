@@ -240,6 +240,7 @@ export function DeckPanel({
 
       <Waveform
         data={track?.waveform || []}
+        bands={track?.waveformBands || []}
         currentTime={deck.currentTime}
         duration={duration}
         bpm={track?.bpm || null}

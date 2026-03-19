@@ -5,7 +5,8 @@ import type {
   SourceFilter,
   SpotifyPlaylist,
   Track,
-  TransitionSuggestion
+  TransitionSuggestion,
+  UserTrackMeta
 } from '../types';
 
 const CAMELOT_BY_KEY: Record<string, string> = {
@@ -409,13 +410,21 @@ export function getVisibleTracks(
   searchText: string,
   sortKey: SortKey,
   sortDirection: 'asc' | 'desc',
-  sourceFilter: SourceFilter
+  sourceFilter: SourceFilter,
+  userTrackMeta: Map<string, UserTrackMeta>
 ) {
   const activeCrate = crates.find((crate) => crate.id === selectedCrateId);
   const crateSet = activeCrate ? new Set(activeCrate.trackIds) : null;
   const query = normalizeText(searchText);
+  const isRemovedCrate = selectedCrateId === 'smart:removed';
+  const isHistoryCrate = selectedCrateId === 'smart:history';
 
   const filtered = tracks.filter((track) => {
+    // Hide removed tracks unless viewing the Removed crate
+    if (!isRemovedCrate && userTrackMeta.get(track.id)?.removed) {
+      return false;
+    }
+
     if (crateSet && !crateSet.has(track.id)) {
       return false;
     }
@@ -450,7 +459,21 @@ export function getVisibleTracks(
     return haystack.includes(query);
   });
 
+  // History crate preserves insertion order (most recent first)
+  if (isHistoryCrate && crateSet) {
+    const order = activeCrate!.trackIds;
+    const idToIndex = new Map(order.map((id, i) => [id, i]));
+    return filtered.sort((a, b) => (idToIndex.get(a.id) ?? 999) - (idToIndex.get(b.id) ?? 999));
+  }
+
   const sorted = [...filtered].sort((left, right) => {
+    // Pinned tracks always sort to top
+    const leftPinned = userTrackMeta.get(left.id)?.pinned ? 1 : 0;
+    const rightPinned = userTrackMeta.get(right.id)?.pinned ? 1 : 0;
+    if (leftPinned !== rightPinned) {
+      return rightPinned - leftPinned;
+    }
+
     let comparison = 0;
 
     switch (sortKey) {

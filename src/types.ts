@@ -37,11 +37,21 @@ export interface Track {
   spotifyUrl: string | null;
   coverUrl: string | null;
   waveform: number[];
+  waveformBands: WaveformBand[];
   bpmConfidence: number;
   keyConfidence: number;
   popularity: number | null;
   analysisSource: 'pending' | 'tags' | 'local-analysis' | 'spotify';
   scanError?: string;
+}
+
+export interface WaveformBand {
+  bass: number;
+  lowMid: number;
+  mid: number;
+  highMid: number;
+  treble: number;
+  ultra: number;
 }
 
 export interface TrackAnalysis {
@@ -52,6 +62,7 @@ export interface TrackAnalysis {
   keyConfidence: number;
   energy: number | null;
   waveform: number[];
+  waveformBands: WaveformBand[];
   analysisSource: 'local-analysis';
 }
 
@@ -116,4 +127,16 @@ export interface SetArcSummary {
   headline: string;
   body: string;
   recommendation: string;
+}
+
+export interface UserTrackMeta {
+  favorite?: boolean;
+  pinned?: boolean;
+  removed?: boolean;
+}
+
+export interface PlayHistoryEntry {
+  trackId: string;
+  deckId: DeckId;
+  loadedAt: string;
 }

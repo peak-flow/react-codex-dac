@@ -517,13 +517,10 @@ code {
 
 .waveform-shell {
   position: relative;
-  height: 220px;
+  height: 120px;
   border-radius: 16px;
   border: 1px solid var(--line);
-  background:
-    radial-gradient(circle at top left, rgba(122, 255, 138, 0.04), transparent 36%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.24), rgba(255, 255, 255, 0.015)),
-    rgba(0, 0, 0, 0.22);
+  background: #0c0c0c;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -551,7 +548,7 @@ code {
 
 .waveform-svg {
   display: block;
-  height: 220px;
+  height: 120px;
 }
 
 .waveform-grid {
@@ -638,7 +635,7 @@ code {
 .library-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 920px;
+  min-width: 800px;
 }
 
 .library-table th,
@@ -677,6 +674,43 @@ code {
   border-radius: 999px;
   background: linear-gradient(90deg, var(--cyan), var(--amber));
   min-width: 12px;
+}
+
+.icon-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.icon-btn.active-fav {
+  color: var(--amber);
+}
+
+.icon-btn.active-fav:hover {
+  color: var(--amber-strong);
+}
+
+.icon-btn.active-pin {
+  color: var(--cyan);
+}
+
+.pin-indicator {
+  font-size: 0.75rem;
+}
+
+.pinned-row {
+  background: rgba(122, 255, 138, 0.03);
 }
 
 .source-pill {

@@ -1,5 +1,5 @@
 import { camelotFromKey, normalizeMusicalKey } from './djEngine';
-import type { TrackAnalysis } from '../types';
+import type { TrackAnalysis, WaveformBand } from '../types';
 
 const TARGET_SAMPLE_RATE = 11025;
 const BPM_WINDOW_SECONDS = 90;
@@ -84,6 +84,80 @@ function buildWaveform(samples: Float32Array, bucketCount: number) {
   }
 
   return buckets;
+}
+
+// Frequency band boundaries in Hz for spectral coloring
+// At 11025 Hz sample rate, bin resolution = sampleRate / fftSize
+const BAND_EDGES = [0, 200, 500, 2000, 4000, 5500]; // bass, lowMid, mid, highMid, treble, ultra
+
+function buildWaveformBands(samples: Float32Array, sampleRate: number, bucketCount: number): WaveformBand[] {
+  const fftSize = 512;
+  const bucketSize = Math.max(1, Math.floor(samples.length / bucketCount));
+  const bands: WaveformBand[] = [];
+  const binHz = sampleRate / fftSize;
+
+  // Precompute bin ranges for each band
+  const bandBins = BAND_EDGES.map((edge, i) => {
+    const lo = Math.floor(edge / binHz);
+    const hi = i < BAND_EDGES.length - 1 ? Math.floor(BAND_EDGES[i + 1] / binHz) : Math.floor(fftSize / 2);
+    return { lo, hi: Math.min(hi, Math.floor(fftSize / 2)) };
+  });
+
+  // Hann window
+  const hann = new Float32Array(fftSize);
+  for (let i = 0; i < fftSize; i += 1) {
+    hann[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (fftSize - 1)));
+  }
+
+  for (let bucket = 0; bucket < bucketCount; bucket += 1) {
+    const start = bucket * bucketSize;
+    const center = start + Math.floor(bucketSize / 2);
+    const fftStart = Math.max(0, center - Math.floor(fftSize / 2));
+
+    // Extract windowed frame
+    const real = new Float32Array(fftSize);
+    const imag = new Float32Array(fftSize);
+    for (let i = 0; i < fftSize; i += 1) {
+      const si = fftStart + i;
+      real[i] = (si < samples.length ? samples[si] : 0) * hann[i];
+    }
+
+    // Simple DFT for the bins we need (not full FFT — we only need ~50 bins)
+    const magnitudes = new Float32Array(Math.floor(fftSize / 2));
+    const maxBin = Math.min(magnitudes.length, bandBins[bandBins.length - 1].hi + 1);
+    for (let k = 0; k < maxBin; k += 1) {
+      let re = 0;
+      let im = 0;
+      const omega = (2 * Math.PI * k) / fftSize;
+      for (let n = 0; n < fftSize; n += 1) {
+        re += real[n] * Math.cos(omega * n);
+        im -= real[n] * Math.sin(omega * n);
+      }
+      magnitudes[k] = Math.sqrt(re * re + im * im) / fftSize;
+    }
+
+    // Sum energy in each band
+    const bandEnergy = bandBins.map(({ lo, hi }) => {
+      let sum = 0;
+      for (let k = lo; k < hi; k += 1) {
+        sum += magnitudes[k] * magnitudes[k];
+      }
+      return Math.sqrt(sum / Math.max(1, hi - lo));
+    });
+
+    // Normalize so the max band = 1
+    const maxE = Math.max(...bandEnergy, 0.0001);
+    bands.push({
+      bass: clamp(bandEnergy[0] / maxE, 0, 1),
+      lowMid: clamp(bandEnergy[1] / maxE, 0, 1),
+      mid: clamp(bandEnergy[2] / maxE, 0, 1),
+      highMid: clamp(bandEnergy[3] / maxE, 0, 1),
+      treble: clamp(bandEnergy[4] / maxE, 0, 1),
+      ultra: clamp((bandEnergy[5] ?? 0) / maxE, 0, 1)
+    });
+  }
+
+  return bands;
 }
 
 function estimateEnergy(samples: Float32Array) {
@@ -308,6 +382,7 @@ export async function analyzeAudioFile(
     keyConfidence: keyResult.confidence,
     energy: estimateEnergy(resampled),
     waveform: buildWaveform(resampled, 180),
+    waveformBands: buildWaveformBands(resampled, TARGET_SAMPLE_RATE, 180),
     analysisSource: 'local-analysis'
   };
 }
