@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peak DJ — Theme Playground</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{color-scheme:dark}
+body{
+  font-family:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+  background:#0a0e14;color:#e8ecf2;min-height:100vh;
+  display:grid;grid-template-columns:340px minmax(0,1fr);
+}
+
+/* ── Controls Panel ── */
+.controls{
+  background:#0d1117;border-right:1px solid rgba(255,255,255,.08);
+  padding:24px 20px;overflow-y:auto;max-height:100vh;
+  display:flex;flex-direction:column;gap:20px;
+}
+.controls h1{font-size:1.1rem;letter-spacing:.04em;margin-bottom:2px}
+.controls .subtitle{color:#6b7a8d;font-size:.78rem;margin-bottom:8px}
+.group{display:flex;flex-direction:column;gap:10px}
+.group-title{
+  font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;
+  color:#5a6a7d;border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:6px;
+}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:.75rem;color:#8a9bae}
+.field input[type="range"]{width:100%;accent-color:#6cffd6}
+.field input[type="color"]{
+  width:100%;height:32px;border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;background:transparent;cursor:pointer;padding:2px;
+}
+.field select{
+  background:#161b22;color:#e8ecf2;border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;padding:8px 10px;font-size:.82rem;
+}
+.field .value{font-size:.72rem;color:#5a6a7d;text-align:right}
+.row{display:flex;gap:8px}
+.row .field{flex:1}
+
+/* Presets */
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.preset-btn{
+  padding:10px 8px;border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;background:rgba(255,255,255,.02);color:#c8d4e0;
+  cursor:pointer;font-size:.76rem;text-align:center;transition:all .15s;
+}
+.preset-btn:hover{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.05)}
+.preset-btn.active{border-color:rgba(108,255,214,.5);background:rgba(108,255,214,.08);color:#fff}
+
+/* ── Preview + Prompt Area ── */
+.right-col{display:flex;flex-direction:column;overflow:hidden}
+
+.preview-area{
+  flex:1;overflow-y:auto;padding:24px;
+  transition:background .3s,color .3s;
+}
+
+/* Prompt */
+.prompt-area{
+  border-top:1px solid rgba(255,255,255,.08);
+  background:#0d1117;padding:16px 20px;
+}
+.prompt-area h3{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:#5a6a7d;margin-bottom:8px}
+.prompt-text{
+  font-family:'IBM Plex Mono','SFMono-Regular',monospace;
+  font-size:.78rem;color:#c8d4e0;line-height:1.6;
+  background:#161b22;border:1px solid rgba(255,255,255,.06);
+  border-radius:10px;padding:14px;white-space:pre-wrap;
+  max-height:140px;overflow-y:auto;
+}
+.copy-btn{
+  margin-top:8px;padding:8px 16px;border:1px solid rgba(108,255,214,.3);
+  border-radius:8px;background:rgba(108,255,214,.08);color:#6cffd6;
+  cursor:pointer;font-size:.78rem;transition:all .15s;
+}
+.copy-btn:hover{background:rgba(108,255,214,.16)}
+
+/* ── Mock DJ Interface ── */
+.mock-shell{
+  display:grid;grid-template-columns:220px minmax(0,1fr) 240px;
+  gap:14px;min-height:680px;transition:all .35s;
+}
+.mock-panel{
+  border-radius:var(--r,24px);
+  padding:18px;
+  transition:all .35s;
+  overflow:hidden;
+  position:relative;
+}
+.mock-panel::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  border-radius:inherit;
+  background:linear-gradient(120deg,rgba(255,255,255,.04),transparent 40%);
+}
+
+/* Sidebar mock */
+.mock-sidebar{display:flex;flex-direction:column;gap:14px}
+.mock-logo{font-size:1.3rem;font-weight:800;letter-spacing:.02em}
+.mock-eyebrow{
+  font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;
+  margin-bottom:4px;transition:color .3s;
+}
+.mock-stat{
+  padding:12px;border-radius:calc(var(--r,24px) * .6);
+  transition:all .35s;
+}
+.mock-stat span{font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;display:block}
+.mock-stat strong{font-size:1.6rem;display:block;margin-top:4px}
+.mock-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+.mock-crate{
+  padding:12px 14px;border-radius:calc(var(--r,24px)*.6);
+  cursor:default;display:flex;justify-content:space-between;
+  transition:all .35s;
+}
+.mock-crate strong{font-size:.85rem}
+.mock-crate small{font-size:.72rem}
+
+/* Main area mock */
+.mock-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.mock-header h1{font-size:clamp(1.2rem,1.6vw,1.8rem);line-height:1.1}
+.mock-banner{
+  padding:12px 16px;border-radius:calc(var(--r,24px)*.6);
+  display:flex;gap:10px;align-items:center;transition:all .35s;
+}
+.mock-banner strong{font-size:.65rem;letter-spacing:.14em;text-transform:uppercase}
+
+/* Decks */
+.mock-decks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mock-deck{display:flex;flex-direction:column;gap:10px}
+.mock-deck-header{display:flex;justify-content:space-between;align-items:center}
+.mock-deck-header h2{font-size:1rem}
+.mock-metrics{display:flex;gap:6px;flex-wrap:wrap}
+.mock-chip{
+  padding:4px 10px;border-radius:999px;font-size:.7rem;
+  transition:all .35s;
+}
+.mock-waveform{
+  height:120px;border-radius:calc(var(--r,24px)*.7);
+  position:relative;overflow:hidden;transition:all .35s;
+}
+.mock-waveform canvas{width:100%;height:100%;display:block}
+.mock-waveform .playhead{
+  position:absolute;top:0;bottom:0;width:2px;left:35%;
+  transition:background .3s;
+}
+.mock-transport{display:flex;gap:6px;flex-wrap:wrap}
+.mock-tbtn{
+  padding:8px 12px;border-radius:999px;font-size:.72rem;
+  cursor:default;transition:all .35s;
+}
+
+/* Library */
+.mock-library{display:flex;flex-direction:column;gap:10px}
+.mock-lib-header{display:flex;justify-content:space-between;align-items:baseline}
+.mock-lib-header h2{font-size:1rem}
+.mock-table{
+  border-collapse:collapse;width:100%;border-radius:calc(var(--r,24px)*.6);
+  overflow:hidden;
+}
+.mock-table th{
+  font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:10px 10px;text-align:left;
+  transition:all .35s;
+}
+.mock-table td{padding:10px;transition:all .35s}
+.mock-table tr:not(:last-child) td{border-bottom:1px solid rgba(255,255,255,.04)}
+.mock-energy{height:6px;border-radius:999px;display:inline-block}
+
+/* Insight */
+.mock-insight{display:flex;flex-direction:column;gap:14px}
+.mock-suggestion{
+  padding:14px;border-radius:calc(var(--r,24px)*.6);
+  display:flex;flex-direction:column;gap:8px;transition:all .35s;
+}
+.mock-suggestion strong{font-size:.85rem}
+.mock-suggestion .meta{font-size:.72rem;display:flex;gap:8px;flex-wrap:wrap}
+.mock-sug-icon{
+  width:36px;height:36px;border-radius:10px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:.85rem;transition:all .35s;
+}
+
+@media(max-width:1100px){
+  body{grid-template-columns:1fr}
+  .controls{max-height:none;border-right:0;border-bottom:1px solid rgba(255,255,255,.08)}
+  .mock-shell{grid-template-columns:1fr;min-height:auto}
+}
+</style>
+</head>
+<body>
+
+<!-- ════ Controls ════ -->
+<div class="controls">
+  <div>
+    <h1>Peak DJ Theme Lab</h1>
+    <p class="subtitle">Explore look and feels for the DJ desktop app. Tweak, compare presets, copy the prompt.</p>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Presets</div>
+    <div class="presets" id="presets"></div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Colors</div>
+    <div class="row">
+      <div class="field"><label>Background</label><input type="color" id="bgColor" value="#060b11"></div>
+      <div class="field"><label>Panel</label><input type="color" id="panelColor" value="#0c1520"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Accent 1</label><input type="color" id="accent1" value="#6cffd6"></div>
+      <div class="field"><label>Accent 2</label><input type="color" id="accent2" value="#ffb549"></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Text</label><input type="color" id="textColor" value="#f4f7fb"></div>
+      <div class="field"><label>Muted</label><input type="color" id="mutedColor" value="#8ba5ba"></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Shape & Layout</div>
+    <div class="field">
+      <label>Corner Radius <span class="value" id="radiusVal">28px</span></label>
+      <input type="range" id="radius" min="0" max="40" value="28">
+    </div>
+    <div class="field">
+      <label>Panel Gap <span class="value" id="gapVal">14px</span></label>
+      <input type="range" id="gap" min="4" max="28" value="14">
+    </div>
+    <div class="field">
+      <label>Panel Padding <span class="value" id="paddingVal">18px</span></label>
+      <input type="range" id="padding" min="8" max="32" value="18">
+    </div>
+    <div class="field">
+      <label>Panel Opacity <span class="value" id="panelOpacityVal">84%</span></label>
+      <input type="range" id="panelOpacity" min="40" max="100" value="84">
+    </div>
+    <div class="field">
+      <label>Blur <span class="value" id="blurVal">20px</span></label>
+      <input type="range" id="blur" min="0" max="40" value="20">
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Typography</div>
+    <div class="field">
+      <label>Heading Font</label>
+      <select id="headingFont">
+        <option value="'Avenir Next Condensed','Roboto Condensed','Arial Narrow',sans-serif">Condensed Sans (current)</option>
+        <option value="'SF Pro Display','Helvetica Neue',sans-serif">SF Pro / Helvetica</option>
+        <option value="'JetBrains Mono','Fira Code',monospace">Monospace</option>
+        <option value="'Georgia','Palatino',serif">Serif</option>
+        <option value="'Inter','system-ui',sans-serif">Inter</option>
+        <option value="'Orbitron','Rajdhani',sans-serif">Futuristic</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Body Size <span class="value" id="bodySizeVal">14px</span></label>
+      <input type="range" id="bodySize" min="11" max="18" value="14">
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Vibe</div>
+    <div class="field">
+      <label>Glow Intensity <span class="value" id="glowVal">40%</span></label>
+      <input type="range" id="glow" min="0" max="100" value="40">
+    </div>
+    <div class="field">
+      <label>Background Style</label>
+      <select id="bgStyle">
+        <option value="gradient">Radial Gradient (current)</option>
+        <option value="flat">Flat Solid</option>
+        <option value="mesh">Mesh Gradient</option>
+        <option value="noise">Subtle Noise</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Grid Overlay</label>
+      <select id="gridOverlay">
+        <option value="on">On (current)</option>
+        <option value="off">Off</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Border Style</label>
+      <select id="borderStyle">
+        <option value="subtle">Subtle Lines (current)</option>
+        <option value="glow">Glowing Borders</option>
+        <option value="none">No Borders</option>
+        <option value="strong">Strong Borders</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ════ Right Column ════ -->
+<div class="right-col">
+<div class="preview-area" id="previewArea">
+  <div class="mock-shell" id="mockShell">
+    <!-- Sidebar -->
+    <div class="mock-panel mock-sidebar" id="mockSidebar">
+      <div>
+        <div class="mock-eyebrow" id="ey1">Local Library</div>
+        <div class="mock-logo" id="logoText">PEAK DJ</div>
+      </div>
+      <div class="mock-stats">
+        <div class="mock-stat" id="stat1"><span>Tracks</span><strong>847</strong></div>
+        <div class="mock-stat" id="stat2"><span>Playable</span><strong>612</strong></div>
+        <div class="mock-stat" id="stat3"><span>Matched</span><strong>193</strong></div>
+        <div class="mock-stat" id="stat4"><span>Analyzed</span><strong>580</strong></div>
+      </div>
+      <div class="mock-eyebrow" id="ey2">Crates</div>
+      <div class="mock-crate" id="crate1"><strong>All Tracks</strong><small>847</small></div>
+      <div class="mock-crate" id="crate2"><strong>Warm Up</strong><small>64</small></div>
+      <div class="mock-crate" id="crate3"><strong>Peak Pressure</strong><small>128</small></div>
+      <div class="mock-crate" id="crate4"><strong>Harmonic Ladder</strong><small>96</small></div>
+    </div>
+
+    <!-- Main -->
+    <div class="mock-main">
+      <div class="mock-panel" id="mockHeader">
+        <div class="mock-header">
+          <div class="mock-eyebrow" id="ey3">Desk View</div>
+          <h1 id="headerH1">Two-deck command center</h1>
+        </div>
+      </div>
+
+      <div class="mock-banner" id="mockBanner">
+        <strong>Operator</strong><span>Scanned 847 tracks. Analysis 96% complete.</span>
+      </div>
+
+      <div class="mock-decks">
+        <div class="mock-panel mock-deck" id="deckA">
+          <div class="mock-deck-header">
+            <h2>Deck A</h2>
+            <div class="mock-metrics">
+              <span class="mock-chip" id="chipA1">128 BPM</span>
+              <span class="mock-chip" id="chipA2">4A</span>
+              <span class="mock-chip" id="chipA3">E 82</span>
+            </div>
+          </div>
+          <div class="mock-waveform" id="waveA"><canvas id="canvasA"></canvas><div class="playhead" id="playheadA"></div></div>
+          <div class="mock-transport" id="transportA">
+            <span class="mock-tbtn" id="tbtnA1">Play</span>
+            <span class="mock-tbtn" id="tbtnA2">Cue</span>
+            <span class="mock-tbtn" id="tbtnA3">Sync</span>
+          </div>
+        </div>
+        <div class="mock-panel mock-deck" id="deckB">
+          <div class="mock-deck-header">
+            <h2>Deck B</h2>
+            <div class="mock-metrics">
+              <span class="mock-chip" id="chipB1">126 BPM</span>
+              <span class="mock-chip" id="chipB2">5A</span>
+              <span class="mock-chip" id="chipB3">E 74</span>
+            </div>
+          </div>
+          <div class="mock-waveform" id="waveB"><canvas id="canvasB"></canvas><div class="playhead" id="playheadB"></div></div>
+          <div class="mock-transport" id="transportB">
+            <span class="mock-tbtn" id="tbtnB1">Play</span>
+            <span class="mock-tbtn" id="tbtnB2">Cue</span>
+            <span class="mock-tbtn" id="tbtnB3">Sync</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mock-panel mock-library" id="mockLibrary">
+        <div class="mock-lib-header">
+          <div>
+            <div class="mock-eyebrow" id="ey4">Unified Library</div>
+            <h2>847 tracks in view</h2>
+          </div>
+        </div>
+        <table class="mock-table" id="mockTable">
+          <thead><tr id="tableHead">
+            <th>Title</th><th>Artist</th><th>BPM</th><th>Key</th><th>Energy</th><th>Source</th>
+          </tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Insight -->
+    <div class="mock-panel mock-insight" id="mockInsight">
+      <div class="mock-eyebrow" id="ey5">Transition Coach</div>
+      <h2>Next Track Ideas</h2>
+      <div class="mock-suggestion" id="sug1">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <strong>Midnight City</strong>
+          <span class="mock-sug-icon" id="sugIcon1">92</span>
+        </div>
+        <div class="meta"><span>M83</span><span>126 BPM</span><span>5A</span></div>
+      </div>
+      <div class="mock-suggestion" id="sug2">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <strong>Genesis</strong>
+          <span class="mock-sug-icon" id="sugIcon2">87</span>
+        </div>
+        <div class="meta"><span>Justice</span><span>127 BPM</span><span>4B</span></div>
+      </div>
+      <div class="mock-suggestion" id="sug3">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <strong>Strobe</strong>
+          <span class="mock-sug-icon" id="sugIcon3">84</span>
+        </div>
+        <div class="meta"><span>deadmau5</span><span>128 BPM</span><span>3A</span></div>
+      </div>
+      <div class="mock-eyebrow" id="ey6" style="margin-top:10px">Set Arc</div>
+      <div class="mock-suggestion" id="arcCard">
+        <strong>Energy Profile</strong>
+        <div class="meta"><span>Avg 72</span><span>Range 38-96</span><span>Rising</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="prompt-area">
+  <h3>Generated Prompt</h3>
+  <div class="prompt-text" id="promptOutput"></div>
+  <button class="copy-btn" id="copyBtn">Copy Prompt</button>
+</div>
+</div>
+
+<script>
+// ── Defaults ──
+const DEFAULTS = {
+  bgColor:'#060b11',panelColor:'#0c1520',accent1:'#6cffd6',accent2:'#ffb549',
+  textColor:'#f4f7fb',mutedColor:'#8ba5ba',
+  radius:28,gap:14,padding:18,panelOpacity:84,blur:20,
+  headingFont:"'Avenir Next Condensed','Roboto Condensed','Arial Narrow',sans-serif",
+  bodySize:14,glow:40,bgStyle:'gradient',gridOverlay:'on',borderStyle:'subtle'
+};
+
+const PRESETS = {
+  'Current Theme':{...DEFAULTS},
+  'Neon Club':{
+    bgColor:'#080412',panelColor:'#120822',accent1:'#ff2ecc',accent2:'#00f0ff',
+    textColor:'#f8f0ff',mutedColor:'#9a7cb8',
+    radius:20,gap:12,padding:18,panelOpacity:78,blur:24,
+    headingFont:"'Orbitron','Rajdhani',sans-serif",
+    bodySize:13,glow:90,bgStyle:'mesh',gridOverlay:'off',borderStyle:'glow'
+  },
+  'Vinyl Warmth':{
+    bgColor:'#1a1410',panelColor:'#241c14',accent1:'#e8a84c',accent2:'#c4694a',
+    textColor:'#f5ebe0',mutedColor:'#a89078',
+    radius:16,gap:16,padding:22,panelOpacity:90,blur:12,
+    headingFont:"'Georgia','Palatino',serif",
+    bodySize:15,glow:20,bgStyle:'flat',gridOverlay:'off',borderStyle:'subtle'
+  },
+  'Minimal Studio':{
+    bgColor:'#111111',panelColor:'#1a1a1a',accent1:'#ffffff',accent2:'#888888',
+    textColor:'#e0e0e0',mutedColor:'#666666',
+    radius:8,gap:10,padding:16,panelOpacity:95,blur:0,
+    headingFont:"'Inter','system-ui',sans-serif",
+    bodySize:13,glow:0,bgStyle:'flat',gridOverlay:'off',borderStyle:'strong'
+  },
+  'Sunset Session':{
+    bgColor:'#140a0e',panelColor:'#1e1018',accent1:'#ff7a5c',accent2:'#ffd166',
+    textColor:'#fff0e8',mutedColor:'#b08a7a',
+    radius:24,gap:14,padding:20,panelOpacity:82,blur:18,
+    headingFont:"'SF Pro Display','Helvetica Neue',sans-serif",
+    bodySize:14,glow:55,bgStyle:'gradient',gridOverlay:'on',borderStyle:'subtle'
+  },
+  'Ice Terminal':{
+    bgColor:'#040810',panelColor:'#0a1018',accent1:'#4dc9f6',accent2:'#a8e6cf',
+    textColor:'#d4e8f0',mutedColor:'#5a7888',
+    radius:4,gap:8,padding:14,panelOpacity:92,blur:6,
+    headingFont:"'JetBrains Mono','Fira Code',monospace",
+    bodySize:12,glow:30,bgStyle:'noise',gridOverlay:'on',borderStyle:'subtle'
+  },
+  'Vapor Wave':{
+    bgColor:'#0f0028',panelColor:'#180040',accent1:'#ff71ce',accent2:'#01cdfe',
+    textColor:'#fffce8',mutedColor:'#b388ff',
+    radius:32,gap:16,padding:22,panelOpacity:70,blur:30,
+    headingFont:"'Orbitron','Rajdhani',sans-serif",
+    bodySize:14,glow:85,bgStyle:'mesh',gridOverlay:'on',borderStyle:'glow'
+  },
+  'Pioneer Dark':{
+    bgColor:'#0a0a0a',panelColor:'#141414',accent1:'#00c8ff',accent2:'#ff3c00',
+    textColor:'#e8e8e8',mutedColor:'#707070',
+    radius:12,gap:10,padding:16,panelOpacity:96,blur:4,
+    headingFont:"'SF Pro Display','Helvetica Neue',sans-serif",
+    bodySize:13,glow:50,bgStyle:'flat',gridOverlay:'off',borderStyle:'strong'
+  },
+  'Forest Night':{
+    bgColor:'#080e08',panelColor:'#0e160e',accent1:'#7aff8a',accent2:'#d4e157',
+    textColor:'#e0f0e4',mutedColor:'#6a8a6e',
+    radius:20,gap:14,padding:20,panelOpacity:86,blur:16,
+    headingFont:"'Inter','system-ui',sans-serif",
+    bodySize:14,glow:35,bgStyle:'gradient',gridOverlay:'on',borderStyle:'subtle'
+  }
+};
+
+const state = {...DEFAULTS};
+let activePreset = 'Current Theme';
+
+// ── Hex helpers ──
+function hexToRgb(h){const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return{r,g,b}}
+function rgba(hex,a){const{r,g,b}=hexToRgb(hex);return`rgba(${r},${g},${b},${a})`}
+function lighten(hex,amt){const{r,g,b}=hexToRgb(hex);const f=v=>Math.min(255,v+amt);return`rgb(${f(r)},${f(g)},${f(b)})`}
+
+// ── Table data ──
+const TRACKS=[
+  {title:'Midnight City',artist:'M83',bpm:126,key:'5A',energy:78,src:'local'},
+  {title:'Strobe',artist:'deadmau5',bpm:128,key:'3A',energy:84,src:'matched'},
+  {title:'Genesis',artist:'Justice',bpm:127,key:'4B',energy:72,src:'spotify'},
+  {title:'Levels',artist:'Avicii',bpm:126,key:'6B',energy:92,src:'local'},
+  {title:'Innerbloom',artist:'RÜFÜS DU SOL',bpm:122,key:'2A',energy:66,src:'matched'},
+];
+
+// ── Build presets ──
+const presetsEl=document.getElementById('presets');
+Object.keys(PRESETS).forEach(name=>{
+  const btn=document.createElement('button');
+  btn.className='preset-btn';btn.textContent=name;
+  btn.onclick=()=>applyPreset(name);
+  presetsEl.appendChild(btn);
+});
+
+function applyPreset(name){
+  activePreset=name;
+  const p=PRESETS[name];
+  Object.assign(state,p);
+  syncControlsFromState();
+  updateAll();
+}
+
+// ── Sync controls ──
+function syncControlsFromState(){
+  document.getElementById('bgColor').value=state.bgColor;
+  document.getElementById('panelColor').value=state.panelColor;
+  document.getElementById('accent1').value=state.accent1;
+  document.getElementById('accent2').value=state.accent2;
+  document.getElementById('textColor').value=state.textColor;
+  document.getElementById('mutedColor').value=state.mutedColor;
+  document.getElementById('radius').value=state.radius;
+  document.getElementById('gap').value=state.gap;
+  document.getElementById('padding').value=state.padding;
+  document.getElementById('panelOpacity').value=state.panelOpacity;
+  document.getElementById('blur').value=state.blur;
+  document.getElementById('headingFont').value=state.headingFont;
+  document.getElementById('bodySize').value=state.bodySize;
+  document.getElementById('glow').value=state.glow;
+  document.getElementById('bgStyle').value=state.bgStyle;
+  document.getElementById('gridOverlay').value=state.gridOverlay;
+  document.getElementById('borderStyle').value=state.borderStyle;
+}
+
+// ── Wire controls ──
+['bgColor','panelColor','accent1','accent2','textColor','mutedColor'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',e=>{state[id]=e.target.value;activePreset='Custom';updateAll()});
+});
+['radius','gap','padding','panelOpacity','blur','bodySize','glow'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',e=>{state[id]=+e.target.value;activePreset='Custom';updateAll()});
+});
+['headingFont','bgStyle','gridOverlay','borderStyle'].forEach(id=>{
+  document.getElementById(id).addEventListener('change',e=>{state[id]=e.target.value;activePreset='Custom';updateAll()});
+});
+
+// ── Draw waveform ──
+function drawWave(canvasId,accent,glow){
+  const c=document.getElementById(canvasId);
+  const ctx=c.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  c.width=c.offsetWidth*dpr;c.height=c.offsetHeight*dpr;
+  ctx.scale(dpr,dpr);
+  const w=c.offsetWidth,h=c.offsetHeight;
+  ctx.clearRect(0,0,w,h);
+  const bars=90;const bw=w/bars;
+  const seed=canvasId==='canvasA'?42:137;
+  for(let i=0;i<bars;i++){
+    const v=.15+.85*Math.abs(Math.sin(seed+i*.14))*Math.abs(Math.cos(i*.07+seed*.3));
+    const bh=v*h*.82;
+    const y=(h-bh)/2;
+    const grad=ctx.createLinearGradient(0,y,0,y+bh);
+    grad.addColorStop(0,accent);
+    grad.addColorStop(1,rgba(accent,.3));
+    ctx.fillStyle=grad;
+    ctx.fillRect(i*bw+1,y,bw-2,bh);
+  }
+  if(glow>0){
+    ctx.globalAlpha=glow*.006;
+    ctx.fillStyle=accent;
+    ctx.fillRect(0,0,w,h);
+    ctx.globalAlpha=1;
+  }
+}
+
+// ── Render ──
+function updateAll(){
+  const s=state;
+  const r=s.radius+'px';
+  const preview=document.getElementById('previewArea');
+  const shell=document.getElementById('mockShell');
+
+  // Background
+  let bg;
+  if(s.bgStyle==='flat') bg=s.bgColor;
+  else if(s.bgStyle==='gradient') bg=`radial-gradient(circle at top left,${rgba(s.accent1,.12)},transparent 28%),radial-gradient(circle at top right,${rgba(s.accent2,.12)},transparent 22%),linear-gradient(140deg,${s.bgColor} 0%,${lighten(s.bgColor,10)} 35%,${s.bgColor} 100%)`;
+  else if(s.bgStyle==='mesh') bg=`radial-gradient(circle at 20% 30%,${rgba(s.accent1,.14)},transparent 40%),radial-gradient(circle at 80% 60%,${rgba(s.accent2,.14)},transparent 40%),radial-gradient(circle at 50% 90%,${rgba(s.accent1,.08)},transparent 30%),${s.bgColor}`;
+  else bg=s.bgColor;
+  preview.style.background=bg;
+  preview.style.color=s.textColor;
+  preview.style.fontSize=s.bodySize+'px';
+  shell.style.gap=s.gap+'px';
+  shell.style.setProperty('--r',r);
+
+  // Panel style helper
+  const panelBg=rgba(s.panelColor,s.panelOpacity/100);
+  const borderMap={subtle:rgba(s.mutedColor,.15),glow:rgba(s.accent1,.35),none:'transparent',strong:rgba(s.mutedColor,.3)};
+  const borderC=borderMap[s.borderStyle];
+  const shadowGlow=s.glow>0?`0 0 ${s.glow*.6}px ${rgba(s.accent1,s.glow*.002)}`:'none';
+  const panelShadow=s.glow>20?`0 28px 90px ${rgba(s.bgColor,.5)},${shadowGlow}`:`0 28px 90px ${rgba(s.bgColor,.4)}`;
+
+  document.querySelectorAll('.mock-panel').forEach(el=>{
+    el.style.background=panelBg;
+    el.style.border=`1px solid ${borderC}`;
+    el.style.borderRadius=r;
+    el.style.padding=s.padding+'px';
+    el.style.backdropFilter=s.blur>0?`blur(${s.blur}px)`:'none';
+    el.style.boxShadow=panelShadow;
+    el.style.color=s.textColor;
+  });
+
+  // Deck specific shadows
+  const deckA=document.getElementById('deckA');
+  const deckB=document.getElementById('deckB');
+  if(s.glow>20){
+    deckA.style.boxShadow=`0 28px 90px ${rgba(s.accent1,.12)},0 0 ${s.glow*.4}px ${rgba(s.accent1,.08)}`;
+    deckB.style.boxShadow=`0 28px 90px ${rgba(s.accent2,.14)},0 0 ${s.glow*.4}px ${rgba(s.accent2,.08)}`;
+  }
+
+  // Headings
+  document.querySelectorAll('h1,h2,.mock-logo').forEach(el=>{
+    el.style.fontFamily=s.headingFont;el.style.color=s.textColor;
+  });
+
+  // Eyebrows
+  document.querySelectorAll('.mock-eyebrow').forEach(el=>el.style.color=s.accent1);
+
+  // Muted text
+  document.querySelectorAll('.meta span,.mock-crate small,.mock-stat span,.mock-table th').forEach(el=>el.style.color=s.mutedColor);
+
+  // Stats
+  const subR=Math.max(4,s.radius*.6)+'px';
+  document.querySelectorAll('.mock-stat').forEach(el=>{
+    el.style.borderRadius=subR;
+    el.style.background=rgba(s.textColor,.035);
+    el.style.border=`1px solid ${rgba(s.textColor,.05)}`;
+  });
+  document.querySelectorAll('.mock-stat strong').forEach(el=>el.style.color=s.textColor);
+
+  // Crates
+  document.querySelectorAll('.mock-crate').forEach((el,i)=>{
+    el.style.borderRadius=subR;
+    el.style.border=`1px solid ${i===0?rgba(s.accent1,.42):rgba(s.textColor,.06)}`;
+    el.style.background=i===0?`linear-gradient(120deg,${rgba(s.accent1,.08)},${rgba(s.accent2,.08)})`:rgba(s.textColor,.025);
+  });
+
+  // Banner
+  const banner=document.getElementById('mockBanner');
+  banner.style.borderRadius=subR;
+  banner.style.border=`1px solid ${rgba(s.textColor,.06)}`;
+  banner.style.background=rgba(s.textColor,.03);
+
+  // Chips
+  document.querySelectorAll('.mock-chip').forEach(el=>{
+    el.style.border=`1px solid ${rgba(s.textColor,.1)}`;
+    el.style.background=rgba(s.textColor,.04);
+    el.style.color=s.textColor;
+  });
+
+  // Waveforms
+  document.querySelectorAll('.mock-waveform').forEach(el=>{
+    el.style.borderRadius=Math.max(4,s.radius*.7)+'px';
+    el.style.background=`radial-gradient(circle at top left,${rgba(s.textColor,.06)},transparent 36%),linear-gradient(180deg,rgba(0,0,0,.24),${rgba(s.textColor,.02)}),rgba(0,0,0,.26)`;
+    el.style.border=`1px solid ${rgba(s.textColor,.06)}`;
+  });
+  document.getElementById('playheadA').style.background=s.textColor;
+  document.getElementById('playheadB').style.background=s.textColor;
+  drawWave('canvasA',s.accent1,s.glow);
+  drawWave('canvasB',s.accent2,s.glow);
+
+  // Transport buttons
+  document.querySelectorAll('.mock-tbtn').forEach(el=>{
+    el.style.border=`1px solid ${rgba(s.textColor,.15)}`;
+    el.style.background=rgba(s.textColor,.035);
+    el.style.color=s.textColor;
+  });
+  ['tbtnA1','tbtnB1'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.style.background=`linear-gradient(120deg,${rgba(s.accent1,.16)},${rgba(s.accent1,.28)})`;
+  });
+
+  // Table
+  document.getElementById('tableHead').querySelectorAll('th').forEach(th=>{
+    th.style.background=rgba(s.panelColor,.94);
+    th.style.color=s.mutedColor;
+  });
+  // Rebuild table
+  const tbody=document.getElementById('tableBody');
+  tbody.innerHTML='';
+  TRACKS.forEach(t=>{
+    const tr=document.createElement('tr');
+    const srcColors={local:s.accent1,matched:s.accent2,spotify:'#8dff7a'};
+    tr.innerHTML=`
+      <td style="color:${s.textColor}"><strong>${t.title}</strong></td>
+      <td style="color:${s.mutedColor}">${t.artist}</td>
+      <td style="color:${s.textColor}">${t.bpm}</td>
+      <td style="color:${s.textColor}">${t.key}</td>
+      <td><span class="mock-energy" style="width:${t.energy}%;background:linear-gradient(90deg,${s.accent1},${s.accent2})"></span></td>
+      <td style="color:${srcColors[t.src]||s.textColor}">${t.src}</td>`;
+    tr.querySelectorAll('td').forEach(td=>{td.style.borderBottomColor=rgba(s.textColor,.04)});
+    tbody.appendChild(tr);
+  });
+
+  // Suggestions
+  document.querySelectorAll('.mock-suggestion').forEach(el=>{
+    el.style.borderRadius=subR;
+    el.style.border=`1px solid ${rgba(s.textColor,.06)}`;
+    el.style.background=rgba(s.textColor,.028);
+  });
+  document.querySelectorAll('.mock-sug-icon').forEach(el=>{
+    el.style.borderRadius='10px';
+    el.style.background=rgba(s.accent1,.12);
+    el.style.color=s.accent1;
+  });
+
+  // Values display
+  document.getElementById('radiusVal').textContent=s.radius+'px';
+  document.getElementById('gapVal').textContent=s.gap+'px';
+  document.getElementById('paddingVal').textContent=s.padding+'px';
+  document.getElementById('panelOpacityVal').textContent=s.panelOpacity+'%';
+  document.getElementById('blurVal').textContent=s.blur+'px';
+  document.getElementById('bodySizeVal').textContent=s.bodySize+'px';
+  document.getElementById('glowVal').textContent=s.glow+'%';
+
+  // Preset buttons
+  document.querySelectorAll('.preset-btn').forEach(btn=>{
+    btn.classList.toggle('active',btn.textContent===activePreset);
+  });
+
+  updatePrompt();
+}
+
+// ── Prompt ──
+function updatePrompt(){
+  const s=state;
+  const d=DEFAULTS;
+  const parts=[];
+
+  if(activePreset!=='Custom'&&activePreset!=='Current Theme'){
+    parts.push(`Apply the "${activePreset}" theme to the DJ app`);
+  }
+
+  const colorChanges=[];
+  if(s.bgColor!==d.bgColor) colorChanges.push(`background ${s.bgColor}`);
+  if(s.panelColor!==d.panelColor) colorChanges.push(`panels ${s.panelColor}`);
+  if(s.accent1!==d.accent1) colorChanges.push(`primary accent ${s.accent1}`);
+  if(s.accent2!==d.accent2) colorChanges.push(`secondary accent ${s.accent2}`);
+  if(s.textColor!==d.textColor) colorChanges.push(`text ${s.textColor}`);
+  if(s.mutedColor!==d.mutedColor) colorChanges.push(`muted text ${s.mutedColor}`);
+  if(colorChanges.length) parts.push(`Change the color palette: ${colorChanges.join(', ')}`);
+
+  if(s.radius!==d.radius) parts.push(`Set border-radius to ${s.radius}px (${s.radius<10?'sharp and technical':s.radius>24?'soft and rounded':'moderate'})`);
+  if(s.gap!==d.gap) parts.push(`Use ${s.gap}px gaps between panels (${s.gap<10?'tight/dense':'airy'} spacing)`);
+  if(s.padding!==d.padding) parts.push(`Panel padding ${s.padding}px`);
+  if(s.panelOpacity!==d.panelOpacity) parts.push(`Panel background opacity ${s.panelOpacity}% (${s.panelOpacity>90?'nearly opaque':s.panelOpacity<75?'very translucent':'moderately translucent'})`);
+  if(s.blur!==d.blur){
+    if(s.blur===0) parts.push('Remove backdrop blur for a flat feel');
+    else parts.push(`Backdrop blur ${s.blur}px (${s.blur>20?'heavy frosted glass':'subtle depth'})`);
+  }
+  if(s.headingFont!==d.headingFont){
+    const name=s.headingFont.split(',')[0].replace(/'/g,'');
+    parts.push(`Use ${name} for headings`);
+  }
+  if(s.bodySize!==d.bodySize) parts.push(`Base font size ${s.bodySize}px`);
+  if(s.glow!==d.glow){
+    if(s.glow===0) parts.push('Remove all glow effects for a flat, matte look');
+    else if(s.glow>70) parts.push(`Strong neon glow effects (${s.glow}% intensity) on panels and waveforms`);
+    else parts.push(`Subtle glow at ${s.glow}% intensity`);
+  }
+  if(s.bgStyle!==d.bgStyle){
+    const labels={flat:'flat solid background',mesh:'mesh gradient background with multiple radial color stops',noise:'subtle noise texture background'};
+    parts.push(`Use a ${labels[s.bgStyle]||s.bgStyle}`);
+  }
+  if(s.gridOverlay!==d.gridOverlay) parts.push(s.gridOverlay==='off'?'Remove the grid overlay':'Add a subtle grid overlay');
+  if(s.borderStyle!==d.borderStyle){
+    const labels={glow:'glowing accent-colored borders on panels',none:'remove all panel borders for a seamless look',strong:'strong visible borders on panels'};
+    parts.push(labels[s.borderStyle]||`${s.borderStyle} borders`);
+  }
+
+  const out=document.getElementById('promptOutput');
+  if(parts.length===0){
+    out.textContent='The current theme matches the app defaults. Adjust controls or pick a preset to generate a prompt.';
+  } else {
+    out.textContent=`Update the Peak DJ app's styles.css with these changes:\n\n${parts.map((p,i)=>`${i+1}. ${p}`).join('\n')}\n\nKeep the existing layout structure (3-column grid, sidebar/main/insight) and component class names. Only modify CSS custom properties and style values.`;
+  }
+}
+
+// Copy
+document.getElementById('copyBtn').addEventListener('click',()=>{
+  navigator.clipboard.writeText(document.getElementById('promptOutput').textContent).then(()=>{
+    const btn=document.getElementById('copyBtn');
+    btn.textContent='Copied!';
+    setTimeout(()=>btn.textContent='Copy Prompt',1500);
+  });
+});
+
+// Resize waveforms
+window.addEventListener('resize',()=>{drawWave('canvasA',state.accent1,state.glow);drawWave('canvasB',state.accent2,state.glow)});
+
+// Init
+updateAll();
+</script>
+</body>
+</html>
